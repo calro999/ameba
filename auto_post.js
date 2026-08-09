@@ -222,26 +222,28 @@ ${profileContent}
 --------------------------------------------------
 【絶対に守るべき執筆ガイドライン】:
 
-1. **タイトル（スーパーフックタイトル）**:
+1. **アフィリエイトリンク禁止・商品名のみ記載**:
+   - **アフィリエイトリンクやHTMLカードは一切記述しないでください。** Ameba Pick機能で読者が購入できるように、文章内には純粋な「正式商品名」と「価格（〇〇円）」、そしてレビューテキストのみを記述してください。
+
+2. **タイトル（スーパーフックタイトル）**:
    - 当たり障りのないタイトルは絶対不可。「【本音比較】」「落とし穴」「〇〇ならどっち？」「約${priceDiff}円差の真実」など、読者の疑問や購買欲を強烈に刺激する数字や感情表現を含めた28〜35文字のタイトルにしてください。
    - 例: 「【本音暴露】${nameA} vs ${nameB}！${priceDiff}円差の落とし穴と後悔しない選び方」
    - 例: 「家で極上ポタージュ飲むならどっち？${nameA}と${nameB}をガチ比較してみた」
 
-2. **核心に触れた具体的な比較内容**:
+3. **核心に触れた具体的な比較内容**:
    - 表面的なスペック紹介（価格や容量）だけで終わらせず、以下の具体的な使用シーンの核心に踏み込んで比較してください：
      - ① **お手入れ・洗やすさの違い**（刃の洗いやすさ、本体の軽さ・パーツ分離ができるか等のストレス差）
      - ② **機能と作れるメニューの差**（保温・予約機能、14役多機能 vs シンプルポタージュ機能の差）
      - ③ **容量と生活シーンの体感差**（1000ml＝家族みんな・作り置き vs 700ml＝1〜2人で使い切り）
      - ④ **約${priceDiff}円の価格差を出す価値が本当にあるかどうかの本音判定**
 
-3. **レイアウトと読みやすさ（改行重視）**:
+4. **レイアウトと読みやすさ（改行重視）**:
    - **句点（。）のあとや会話の節目には必ず <br><br> を入れ、しっかり行間を空けてスマホで読みやすくしてください。**
-   - プレースホルダー文字列（「ここにリンク」等）は一切書かないでください。
 
-4. **構成**:
+5. **構成**:
    - 導入: 自宅での悩み・きっかけと2商品の提示
-   - 「<h2>💡 ${nameA} の特徴と魅力</h2>」: 特徴・メリット・向いている人
-   - 「<h2>💡 ${nameB} の特徴と魅力</h2>」: 特徴・メリット・向いている人
+   - 「<h2>💡 ${nameA} の特徴と魅力</h2>」: 正式商品名・価格・特徴・メリット
+   - 「<h2>💡 ${nameB} の特徴と魅力</h2>」: 正式商品名・価格・特徴・メリット
    - 「<h2>⚖️ 徹底比較！洗やすさ・機能・後片付けのリアルな差</h2>」: 核心比較
    - 「<h2>🍶 結論：あなたにピッタリなのはどっち？</h2>」: ズバリ本音の提案
 
@@ -361,48 +363,17 @@ async function injectEditorContent(page, fullHtml) {
   return false;
 }
 
-// アフィリエイトカードHTMLの生成
-function createRakutenCardHtml(item, label) {
-  return `
-    <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
-      ${item.imageUrl ? `<a href="${item.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${item.imageUrl}" alt="${item.itemName}" style="max-width: 130px; height: auto; border-radius: 6px; border: 1px solid #ddd;" /></a>` : ''}
-      <div>
-        <span style="background-color: #bf0000; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${label}</span>
-        <h4 style="margin: 8px 0 8px 0; font-size: 15px; line-height: 1.4;"><a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="color: #333; text-decoration: none;">${item.itemName}</a></h4>
-        <p style="margin: 0 0 8px 0; color: #bf0000; font-weight: bold; font-size: 15px;">価格: ${item.price.toLocaleString()}円 (税込)</p>
-        <a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #bf0000; color: #fff; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;">楽天市場で商品詳細を見る ➔</a>
-      </div>
-    </div>
-  `;
-}
-
-// 3. PlaywrightによるAmeba自動投稿処理
+// 3. PlaywrightによるAmeba自動投稿処理（下書き保存）
 async function postToAmeba(title, rawContentHtml, tags, itemPair) {
   const amebaId = process.env.AMEBA_ID;
   const amebaPassword = process.env.AMEBA_PASSWORD;
   const amebaCookieJson = process.env.AMEBA_COOKIES;
 
   // 「ここにアフィリエイトリンク」などのプレースホルダー文字列を強制置換・排除
-  let cleanContent = rawContentHtml.replace(/（ここに.*?リンク.*?）|【ここに.*?リンク.*?】|ここにアフィリエイトリンク/g, '');
+  let cleanContent = rawContentHtml.replace(/（ここに.*?リンク.*?）|【ここに.*?リンク.*?】|ここにアフィリエイトリンク|\[.*?アフィリエイト.*?\]/g, '');
 
-  // 商品A・商品Bのアフィリエイトカードを見出し下（または指定箇所）に精密挿入
-  const cardA = createRakutenCardHtml(itemPair.itemA, '比較商品A');
-  const cardB = createRakutenCardHtml(itemPair.itemB, '比較商品B');
-
-  // h2タグが複数ある場合、最初のh2の後にcardA、2番目のh2の後にcardBを挟み込む
-  const h2Regex = /<\/h2>/gi;
-  let matchesCount = 0;
-  let fullHtml = cleanContent.replace(h2Regex, (match) => {
-    matchesCount++;
-    if (matchesCount === 1) return `${match}\n${cardA}`;
-    if (matchesCount === 2) return `${match}\n${cardB}`;
-    return match;
-  });
-
-  // 万が一h2タグが無かった場合は末尾に両方配置
-  if (matchesCount < 2) {
-    fullHtml = cleanContent + cardA + cardB;
-  }
+  // 楽天アフィリエイトリンクカードは挿入せず、純粋な記事本文のみを使用（Ameba Pick手動掲載用）
+  const fullHtml = cleanContent;
 
   const browser = await chromium.launch({
     headless: true,
