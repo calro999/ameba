@@ -369,51 +369,70 @@ async function postToAmeba(title, contentHtml, tags, itemPair) {
     console.log('「投稿する」ボタンを押しました。モーダルアニメーションを待機中...');
     await page.waitForTimeout(2500);
 
-    // カバー画像設定確認モーダル（CoverConfirmModal）内の「カバーなしで投稿する」ボタンを探索
-    console.log('モーダル内の「カバーなしで投稿する」ボタンを精密探索中...');
+    // カバー画像設定確認モーダル（CoverConfirmModal）内の「カバーなしで投稿する」ボタンの物理クリック
+    console.log('Playwrightで「カバーなしで投稿する」ボタンを検出・物理クリックします...');
     
-    const coverClicked = await page.evaluate(() => {
-      // 1. まず明確に「カバーなしで投稿する」を含む button または a 要素を検索
-      const buttons = [...document.querySelectorAll('.CoverConfirmModal button, .ucsCommonModal button, button, a')];
-      let target = buttons.find(b => {
-        const t = b.innerText?.trim() || '';
-        return t === 'カバーなしで投稿する' || t === 'カバーなしで投稿' || (t.includes('カバーなし') && t.includes('投稿'));
-      });
+    const coverBtnLocator = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿する"), button:has-text("カバーなしで投稿する"), button:has-text("設定せずに投稿")').first();
+    let clicked = false;
 
-      // 2. なければ「カバーなしで投稿する」の文字を持つ最小の要素を検索
-      if (!target) {
-        const allEls = [...document.querySelectorAll('button, a, span, p, div')];
-        const match = allEls.find(e => e.children.length === 0 && e.innerText?.trim()?.includes('カバーなしで投稿'));
-        if (match) {
-          target = match.closest('button') || match.closest('a') || match;
+    if (await coverBtnLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
+      console.log('Playwright: モーダルボタンを検出！物理クリックを実行します...');
+      await coverBtnLocator.scrollIntoViewIfNeeded().catch(() => {});
+      await coverBtnLocator.focus().catch(() => {});
+      await coverBtnLocator.click({ force: true }).catch(() => {});
+      await page.keyboard.press('Enter').catch(() => {});
+      clicked = true;
+    } else {
+      console.log('Playwrightでの検出失敗。JS全探索クリックを発行します...');
+      const coverClicked = await page.evaluate(() => {
+        const buttons = [...document.querySelectorAll('button, a')];
+        const target = buttons.find(b => b.innerText?.trim()?.includes('カバーなしで投稿'));
+        if (target) {
+          target.click();
+          target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          return true;
         }
-      }
+        return false;
+      }).catch(() => false);
+      clicked = coverClicked;
+    }
 
-      if (target) {
-        const clickText = target.innerText?.trim();
-        target.click();
-        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-        target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        return { success: true, text: clickText, tag: target.tagName };
-      }
-      return { success: false };
-    }).catch(() => ({ success: false }));
+    console.log(`ボタンクリック結果: ${clicked}`);
 
-    console.log('モーダル確定ボタンクリック結果:', JSON.stringify(coverClicked));
-
-    if (!coverClicked.success) {
-      console.log('Playwrightロケータで「カバーなしで投稿」を直接クリック試行...');
-      const coverBtnLocator = page.locator('*:has-text("カバーなしで投稿"), *:has-text("設定せずに投稿")').first();
-      if (await coverBtnLocator.isVisible().catch(() => false)) {
-        await coverBtnLocator.click({ force: true }).catch(() => {});
+    console.log('投稿完了画面（またはURL変更）への推移を監視中...');
+    
+    // URLの変化を最高20秒間チェック（500msごと）
+    let isSuccess = false;
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(500);
+      const cur = page.url();
+      if (cur.includes('entryend') || cur.includes('complete') || !cur.includes('srventryinsertinput.do')) {
+        isSuccess = true;
+        console.log(`【URL推移検知】 ${cur}`);
+        break;
       }
     }
 
-    console.log('投稿完了画面への遷移（最大30秒）を待機中...');
-    await page.waitForNavigation({ timeout: 30000 }).catch(() => {});
-    await page.waitForTimeout(4000);
+    // もし20秒経過してもURLが変わっていない場合、JSで直接 entryForm を submit
+    if (!isSuccess) {
+      console.log('画面が推移していません。全フォームの強制submitを最終発行します...');
+      await page.evaluate(() => {
+        const form = document.querySelector('form[action*="srventryinsertend.do"]') || document.forms[0];
+        if (form) {
+          let p = form.querySelector('input[name="publish_flg"]');
+          if (!p) {
+            p = document.createElement('input');
+            p.type = 'hidden';
+            p.name = 'publish_flg';
+            form.appendChild(p);
+          }
+          p.value = '1';
+          form.submit();
+        }
+      }).catch(() => {});
+
+      await page.waitForTimeout(5000);
+    }
 
     const finalUrl = page.url();
     console.log('最終確定URL:', finalUrl);
