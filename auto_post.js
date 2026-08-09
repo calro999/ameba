@@ -370,21 +370,33 @@ async function postToAmeba(title, contentHtml, tags, itemPair) {
     await page.waitForTimeout(2500);
 
     // カバー画像設定確認モーダル（CoverConfirmModal）内の「カバーなしで投稿する」ボタンを探索
-    console.log('モーダル内の「カバーなしで投稿する」要素を探索中...');
+    console.log('モーダル内の「カバーなしで投稿する」ボタンを精密探索中...');
     
     const coverClicked = await page.evaluate(() => {
-      const allEls = [...document.querySelectorAll('button, a, span, div')];
-      // 「カバーなしで投稿」「このまま投稿」「設定せずに投稿」テキストを持つ要素を検索
-      const btn = allEls.find(e => {
-        const txt = e.innerText?.trim() || '';
-        return txt.includes('カバーなしで投稿') || txt.includes('設定せずに投稿') || txt.includes('このまま投稿');
+      // 1. まず明確に「カバーなしで投稿する」を含む button または a 要素を検索
+      const buttons = [...document.querySelectorAll('.CoverConfirmModal button, .ucsCommonModal button, button, a')];
+      let target = buttons.find(b => {
+        const t = b.innerText?.trim() || '';
+        return t === 'カバーなしで投稿する' || t === 'カバーなしで投稿' || (t.includes('カバーなし') && t.includes('投稿'));
       });
 
-      if (btn) {
-        const target = btn.closest('button') || btn.closest('a') || btn;
+      // 2. なければ「カバーなしで投稿する」の文字を持つ最小の要素を検索
+      if (!target) {
+        const allEls = [...document.querySelectorAll('button, a, span, p, div')];
+        const match = allEls.find(e => e.children.length === 0 && e.innerText?.trim()?.includes('カバーなしで投稿'));
+        if (match) {
+          target = match.closest('button') || match.closest('a') || match;
+        }
+      }
+
+      if (target) {
+        const clickText = target.innerText?.trim();
         target.click();
-        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-        return { success: true, text: target.innerText?.trim() };
+        target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        return { success: true, text: clickText, tag: target.tagName };
       }
       return { success: false };
     }).catch(() => ({ success: false }));
