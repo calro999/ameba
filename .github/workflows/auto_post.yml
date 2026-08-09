@@ -29,6 +29,7 @@ jobs:
         env:
           AMEBA_ID: ${{ secrets.AMEBA_ID }}
           AMEBA_PASSWORD: ${{ secrets.AMEBA_PASSWORD }}
+          AMEBA_COOKIES: ${{ secrets.AMEBA_COOKIES }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
           RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}

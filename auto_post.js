@@ -90,7 +90,8 @@ ${profileContent}
 }
 `;
 
-    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    // サポートされているGeminiモデル
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
     const genAI = new GoogleGenerativeAI(apiKey);
 
     for (const modelName of models) {
@@ -100,7 +101,9 @@ ${profileContent}
           const response = await model.generateContent(prompt);
           const text = response.response.text().trim();
           const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-          return JSON.parse(cleanedJson);
+          const article = JSON.parse(cleanedJson);
+          console.log(`[Gemini API] モデル(${modelName})で記事生成に成功しました。`);
+          return article;
         } catch (err) {
           console.log(`[Gemini API (${modelName}) 試行 ${attempt}] エラー: ${err.message}`);
           if (err.message.includes('429') || err.message.includes('Quota exceeded')) {
@@ -168,87 +171,102 @@ ${profileContent}
 async function postToAmeba(title, contentHtml, tags, itemInfo) {
   const amebaId = process.env.AMEBA_ID;
   const amebaPassword = process.env.AMEBA_PASSWORD;
-  if (!amebaId || !amebaPassword) {
-    throw new Error('AMEBA_ID または AMEBA_PASSWORD が設定されていません。');
-  }
+  const amebaCookieJson = process.env.AMEBA_COOKIES;
 
   const browser = await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
   });
-  const context = await browser.newContext({
+
+  const contextOptions = {
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     extraHTTPHeaders: {
       'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7'
     }
-  });
+  };
+
+  const context = await browser.newContext(contextOptions);
+
+  // CookieがSecretに登録されている場合はセット
+  if (amebaCookieJson) {
+    try {
+      const cookies = JSON.parse(amebaCookieJson);
+      await context.addCookies(cookies);
+      console.log('保存された認証Cookie（セッション）を適用しました。');
+    } catch (e) {
+      console.log('AMEBA_COOKIESの読み込みに失敗しました:', e.message);
+    }
+  }
+
   const page = await context.newPage();
 
   try {
-    console.log('Amebaログイン画面にアクセス中...');
-    await page.goto('https://dauth.user.ameba.jp/login/ameba', { waitUntil: 'domcontentloaded' });
-
-    console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
-    
-    // React/Next.jsフォームのState更新を確定させる入力処理
-    const fillFormInput = async (selector, value) => {
-      const locator = page.locator(selector).first();
-      await locator.waitFor({ state: 'visible', timeout: 15000 });
-      await locator.click();
-      await locator.focus();
-      await locator.fill(value);
-      await locator.evaluate((el, val) => {
-        const tracker = el._valueTracker;
-        if (tracker) tracker.setValue(val);
-        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-        if (nativeSetter) nativeSetter.call(el, val);
-        else el.value = val;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.dispatchEvent(new Event('blur', { bubbles: true }));
-      }, value);
-      await page.waitForTimeout(300);
-    };
-
-    await fillFormInput('input[name="accountId"], #accountId', amebaId);
-    await fillFormInput('input[name="password"], #password', amebaPassword);
-
-    console.log('ログインボタンを押下中...');
-    const submitBtn = page.locator('button.js-submit-button, button[type="submit"], input[type="submit"]').first();
-    await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await submitBtn.click();
-    await page.keyboard.press('Enter').catch(() => {});
-    await page.waitForTimeout(5000);
-
-    for (let i = 0; i < 10; i++) {
-      await page.waitForTimeout(1000);
-      const curUrl = page.url();
-      if (!curUrl.includes('/signin') && !curUrl.includes('/login') && curUrl.includes('ameba.jp')) {
-        break;
-      }
-    }
-
-    console.log('ログイン後URL:', page.url());
-
-    if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-      const pageErrors = await page.locator('[class*="error"], [class*="Error"], .c-errorMessage, #error-msg, p').allInnerTexts().catch(() => []);
-      const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && !t.includes('お困りの方') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('入力してください') || t.includes('失敗')));
-      const errorMsg = realErrors.join(' | ');
-      console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（パスワード不一致またはGoogleログイン専用アカウントの可能性があります）');
-      throw new Error(`Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください（※「Googleでログイン」で作成されたアカウントの場合、Ameba画面でパスワードの新規設定が必要です）。`);
-    }
-
-    console.log('ブログエディタ画面へ移動中...');
+    console.log('ブログエディタ画面へアクセス中...');
     await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
+
+    // ログイン画面にリダイレクトされたか判定
+    if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin') || page.url().includes('/login')) {
+      console.log('ログインセッションが無効です。ID/パスワードによるログインを試みます...');
+      if (!amebaId || !amebaPassword) {
+        throw new Error('AMEBA_ID または AMEBA_PASSWORD が設定されていません。またCookieセッションも無効です。');
+      }
+
+      await page.goto('https://dauth.user.ameba.jp/login/ameba', { waitUntil: 'domcontentloaded' });
+      console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
+
+      const fillFormInput = async (selector, value) => {
+        const locator = page.locator(selector).first();
+        await locator.waitFor({ state: 'visible', timeout: 15000 });
+        await locator.click();
+        await locator.focus();
+        await locator.fill(value);
+        await locator.evaluate((el, val) => {
+          const tracker = el._valueTracker;
+          if (tracker) tracker.setValue(val);
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (nativeSetter) nativeSetter.call(el, val);
+          else el.value = val;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true }));
+        }, value);
+        await page.waitForTimeout(300);
+      };
+
+      await fillFormInput('input[name="accountId"], #accountId', amebaId);
+      await fillFormInput('input[name="password"], #password', amebaPassword);
+
+      console.log('ログインボタンを押下中...');
+      const submitBtn = page.locator('button.js-submit-button, button[type="submit"], input[type="submit"]').first();
+      await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
+      await submitBtn.click();
+      await page.keyboard.press('Enter').catch(() => {});
+      await page.waitForTimeout(5000);
+
+      for (let i = 0; i < 10; i++) {
+        await page.waitForTimeout(1000);
+        const curUrl = page.url();
+        if (!curUrl.includes('/signin') && !curUrl.includes('/login') && curUrl.includes('ameba.jp')) {
+          break;
+        }
+      }
+
+      if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
+        const pageErrors = await page.locator('[class*="error"], [class*="Error"], .c-errorMessage, #error-msg, p').allInnerTexts().catch(() => []);
+        const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && !t.includes('お困りの方') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('入力してください') || t.includes('失敗')));
+        const errorMsg = realErrors.join(' | ');
+        console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（パスワード不一致またはGoogleログイン専用アカウントの可能性があります）');
+        throw new Error(`Amebaログイン認証に失敗しました。Googleログイン専用アカウントの場合はCookie（AMEBA_COOKIES）をSecretに設定してください。`);
+      }
+
+      // ログイン成功したら再度エディタ画面へ
+      await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(3000);
+    }
+
     console.log('エディタ画面URL:', page.url());
     console.log('エディタ画面タイトル:', await page.title());
-
-    if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-      const bodySnippet = await page.locator('body').innerText().catch(() => '');
-      console.error('ログイン画面ボディログ:', bodySnippet.slice(0, 500));
-      throw new Error('Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください。');
-    }
 
     console.log('記事タイトルを入力中...');
     const titleInput = page.locator('input[name="entry_title"], #entryTitle, textarea[data-testid="entry-title-input"]').first();
@@ -303,6 +321,15 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
+    // 【安全対策】投稿ボタン押下直前に 1分〜5分（60〜300秒）のランダム待機を挿入
+    if (process.env.SKIP_DELAY === 'true') {
+      console.log('SKIP_DELAY が有効なため、投稿前待機をスキップします。');
+    } else {
+      const delaySec = Math.floor(Math.random() * 240) + 60; // 60秒(1分)〜300秒(5分)
+      console.log(`安全運用対策: BAN・bot検知防止のため、投稿ボタン押下前に ${delaySec} 秒間（約${Math.round(delaySec/60)}分）ランダム待機します...`);
+      await sleep(delaySec * 1000);
+    }
+
     console.log('「投稿する」ボタンを押下中...');
     const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), [data-testid="entry-submit-button"]').first();
     await postBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -321,17 +348,8 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
   }
 }
 
-// メイン処理（ランダム遅延含む）
+// メイン処理
 async function main() {
-  if (process.env.SKIP_DELAY === 'true') {
-    console.log('SKIP_DELAY が有効なため、ランダム待機をスキップします。');
-  } else {
-    // 安全運用：0分〜15分のランダム遅延を挿入
-    const randomDelayMinutes = Math.floor(Math.random() * 15);
-    console.log(`安全運用対策: 投稿前に ${randomDelayMinutes} 分間ランダム待機します...`);
-    await sleep(randomDelayMinutes * 60 * 1000);
-  }
-
   const keywords = [
     '卓上焼き鳥器',
     '卓上焼肉グリル 無煙',
