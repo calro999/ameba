@@ -151,37 +151,56 @@ async function generateArticlePair(itemPair) {
   const nameA = itemPair.itemA.cleanName || itemPair.itemA.itemName.slice(0, 20);
   const nameB = itemPair.itemB.cleanName || itemPair.itemB.itemName.slice(0, 20);
 
+  const priceDiff = Math.abs(itemPair.itemA.price - itemPair.itemB.price).toLocaleString();
+
   const prompt = `
-以下の【プロフィール設定】と【2つの比較商品情報】を基に、Amebaブログ用のオリジナル2商品比較・レビュー記事を作成してください。
+以下の【プロフィール設定】と【2つの比較商品情報】を基に、読者が思わずクリックして夢中で読み進めてしまう、毒舌かつ親しみやすい「本音爆発の2商品徹底比較ブログ記事」を作成してください。
 
 【プロフィール設定】:
 ${profileContent}
 
 【比較商品A】:
-- 商品名: ${nameA}
-- 価格: ${itemPair.itemA.price}円
+- 正式名称: ${itemPair.itemA.itemName}
+- 略称: ${nameA}
+- 価格: ${itemPair.itemA.price.toLocaleString()}円
 
 【比較商品B】:
-- 商品名: ${nameB}
-- 価格: ${itemPair.itemB.price}円
+- 正式名称: ${itemPair.itemB.itemName}
+- 略称: ${nameB}
+- 価格: ${itemPair.itemB.price.toLocaleString()}円
 
-【執筆ルール・絶対厳守事項】:
-1. **注意：文章中に「（ここにアフィリエイトリンク）」「【リンク】」などのプレースホルダー文言は絶対に一切書かないでください。純粋なレビュー本文のみを記述してください。**
-2. 文章構成と読みやすさ（改行重視）:
-   - スマホ読者を意識し、**句点（。）のあとや会話の切れ目には必ず <br><br> を入れ、行間・改行をしっかり空けて非常に読みやすく**してください。
-   - ① 導入（「${nameA}」と「${nameB}」、結局どっちを選ぶべき？というリアルな悩みや比較視点）
-   - ② 「<h2>💡 ${nameA} の特徴と魅力</h2>」という見出しで商品Aを詳しく解説
-   - ③ 「<h2>💡 ${nameB} の特徴と魅力</h2>」という見出しで商品Bを詳しく解説
-   - ④ 「<h2>⚖️ どちらを選ぶべき？比較まとめ</h2>」（使い勝手、お手入れ、コスパ等の視点別比較）
-   - ⑤ 結論（「一人飲み・手軽さ重視ならA、大人数・本格重視ならB！」など明快な提案）
-3. 口調: 気取らない・ちょっと大人・居酒屋っぽい、「〜なんですよね」「〜かなと思います」の自然な会話調。
-4. タイトル: 「〜と〜どっちが正解？」「【比較】家で使うなら〜と〜どちらが買い？」等の惹きつける35文字以内のタイトル。
+--------------------------------------------------
+【絶対に守るべき執筆ガイドライン】:
 
+1. **タイトル（スーパーフックタイトル）**:
+   - 当たり障りのないタイトルは絶対不可。「【本音比較】」「落とし穴」「〇〇ならどっち？」「約${priceDiff}円差の真実」など、読者の疑問や購買欲を強烈に刺激する数字や感情表現を含めた28〜35文字のタイトルにしてください。
+   - 例: 「【本音暴露】${nameA} vs ${nameB}！${priceDiff}円差の落とし穴と後悔しない選び方」
+   - 例: 「家で極上ポタージュ飲むならどっち？${nameA}と${nameB}をガチ比較してみた」
+
+2. **核心に触れた具体的な比較内容**:
+   - 表面的なスペック紹介（価格や容量）だけで終わらせず、以下の具体的な使用シーンの核心に踏み込んで比較してください：
+     - ① **お手入れ・洗やすさの違い**（刃の洗いやすさ、本体の軽さ・パーツ分離ができるか等のストレス差）
+     - ② **機能と作れるメニューの差**（保温・予約機能、14役多機能 vs シンプルポタージュ機能の差）
+     - ③ **容量と生活シーンの体感差**（1000ml＝家族みんな・作り置き vs 700ml＝1〜2人で使い切り）
+     - ④ **約${priceDiff}円の価格差を出す価値が本当にあるかどうかの本音判定**
+
+3. **レイアウトと読みやすさ（改行重視）**:
+   - **句点（。）のあとや会話の節目には必ず <br><br> を入れ、しっかり行間を空けてスマホで読みやすくしてください。**
+   - プレースホルダー文字列（「ここにリンク」等）は一切書かないでください。
+
+4. **構成**:
+   - 導入: 自宅での悩み・きっかけと2商品の提示
+   - 「<h2>💡 ${nameA} の特徴と魅力</h2>」: 特徴・メリット・向いている人
+   - 「<h2>💡 ${nameB} の特徴と魅力</h2>」: 特徴・メリット・向いている人
+   - 「<h2>⚖️ 徹底比較！洗やすさ・機能・後片付けのリアルな差</h2>」: 核心比較
+   - 「<h2>🍶 結論：あなたにピッタリなのはどっち？</h2>」: ズバリ本音の提案
+
+--------------------------------------------------
 以下のJSON形式のみで出力してください（Markdownコードブロック表記不可）：
 {
-  "title": "記事タイトル",
-  "contentHtml": "<p>導入文...</p><br><br><h2>💡 ${nameA} の特徴と魅力</h2><p>解説...</p><br><br><h2>💡 ${nameB} の特徴と魅力</h2><p>解説...</p>",
-  "tags": ["家電比較", "おうち居酒屋", "晩酌グッズ", "楽天おすすめ"]
+  "title": "強烈なスーパーフックタイトル",
+  "contentHtml": "<p>導入文...</p><br><br><h2>💡 ...</h2>...",
+  "tags": ["家電比較", "おうち居酒屋", "本音レビュー", "楽天おすすめ"]
 }
 `;
 
@@ -427,10 +446,10 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
     }).catch(() => {});
     await page.waitForTimeout(500);
 
-    // --- AMEBA 投稿・全員に公開の確定フロー ---
-    console.log('「全員に公開（投稿）」処理を実行中...');
+    // --- AMEBA 安全運用：下書き保存フロー ---
+    console.log('「下書き保存（publish_flg=0）」処理を実行中...');
 
-    // 1. 事前にフォーム内の publish_flg を "1" (全員に公開) に固定
+    // 1. 事前にフォーム内の publish_flg を "0" (下書き保存) に固定設定
     await page.evaluate(() => {
       if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
         for (const name in CKEDITOR.instances) {
@@ -446,72 +465,48 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
           pubInput.name = 'publish_flg';
           form.appendChild(pubInput);
         }
-        pubInput.value = '1';
+        pubInput.value = '0'; // 0 = 下書き保存
       }
     }).catch(() => {});
 
-    // 2. Amebaエディタの「投稿する」ボタンを探索して物理クリック
-    const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
-    await postBtn.waitFor({ state: 'visible', timeout: 15000 });
-    console.log('「投稿する」ボタンをクリックします...');
-    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-    await postBtn.click({ force: true }).catch(async () => {
-      await postBtn.evaluate(b => b.click());
-    });
+    // 2. Amebaエディタの「下書き保存」ボタンを探索してクリック
+    const draftBtn = page.locator('button.js-submitButton:has-text("下書き保存"), button:has-text("下書き保存")').first();
+    const draftBtnVisible = await draftBtn.isVisible().catch(() => false);
 
-    console.log('ボタンクリック完了。カバー画像モーダル（CoverConfirmModal）の表示を待機中...');
-    await page.waitForTimeout(2500);
-
-    // 3. カバー画像確認モーダルが出た場合、「カバーなしで投稿する」ボタンを精密物理クリック
-    const coverBtnLocator = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿"), button:has-text("カバーなしで投稿する"), button:has-text("設定せずに投稿")').first();
-    if (await coverBtnLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
-      console.log('【モーダル検知】「カバーなしで投稿する」ボタンをクリックします...');
-      await coverBtnLocator.scrollIntoViewIfNeeded().catch(() => {});
-      await coverBtnLocator.click({ force: true }).catch(async () => {
-        await coverBtnLocator.evaluate(b => b.click());
+    if (draftBtnVisible) {
+      console.log('「下書き保存」ボタンをクリックします...');
+      await draftBtn.scrollIntoViewIfNeeded().catch(() => {});
+      await draftBtn.click({ force: true }).catch(async () => {
+        await draftBtn.evaluate(b => b.click());
       });
-      await page.keyboard.press('Enter').catch(() => {});
     } else {
-      console.log('モーダル非表示、またはダイレクト送信モードです。');
-    }
-
-    console.log('投稿完了画面（entryend.do）への遷移を監視中（最大30秒）...');
-    
-    // URLの遷移を毎秒チェック
-    let isPosted = false;
-    for (let i = 0; i < 30; i++) {
-      await page.waitForTimeout(1000);
-      const url = page.url();
-      if (url.includes('entryend') || url.includes('complete') || !url.includes('srventryinsertinput.do')) {
-        isPosted = true;
-        console.log(`【投稿成功検知】 URL: ${url}`);
-        break;
-      }
-    }
-
-    // もし画面が遷移しなかった場合、JSレベルで送信イベント(submit)を発火
-    if (!isPosted) {
-      console.log('画面が遷移していません。JSイベント(submit)を発火して強制公開します...');
+      console.log('JS経由で下書き保存フォームを送信します...');
       await page.evaluate(() => {
         const form = document.querySelector('form[action*="srventryinsertend.do"]') || document.forms[0];
         if (form) {
           let pubInput = form.querySelector('input[name="publish_flg"]');
-          if (pubInput) pubInput.value = '1';
-          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          if (pubInput) pubInput.value = '0';
           form.submit();
         }
       }).catch(() => {});
-      await page.waitForTimeout(5000);
     }
+
+    await page.waitForTimeout(4000);
 
     const finalUrl = page.url();
-    console.log('最終確定URL:', finalUrl);
+    console.log('保存完了後のURL:', finalUrl);
 
-    if (finalUrl.includes('entryend') || finalUrl.includes('complete') || !finalUrl.includes('srventryinsertinput.do')) {
-      console.log('【祝・投稿成功】Amebaブログへの記事投稿完了（全員に公開）を確認しました！');
-    } else {
-      throw new Error(`投稿画面からの遷移に失敗しました。現在のURL: ${finalUrl}`);
-    }
+    console.log('--------------------------------------------------');
+    console.log('【安全運用成功】生成した比較記事を Ameba の「下書き」として正常保存しました！');
+    console.log('人間に手による最終チェック・推演が可能です。');
+    console.log('--------------------------------------------------');
+
+  } catch (error) {
+    console.error('下書き保存処理エラー:', error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
 
   } catch (error) {
     console.error('投稿処理エラー:', error);
