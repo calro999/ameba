@@ -198,11 +198,7 @@ ${profileContent}
 }
 
 // エディタ本文にHTMLを注入する関数
-// CKEditorの内部データモデルに直接setData()することが最重要。
-// iframe.body.innerHTMLを変更してもCKEditorは認識しない（フォーム送信時に空になる）。
 async function injectEditorContent(page, fullHtml) {
-
-  // --- 方式1（最優先）: CKEditorインスタンスに直接setData() ---
   console.log('[エディタ] 方式1: CKEditor.setData() を試行中...');
   const ckeResult = await page.evaluate((html) => {
     if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
@@ -211,7 +207,6 @@ async function injectEditorContent(page, fullHtml) {
         for (const name of names) {
           const inst = CKEDITOR.instances[name];
           inst.setData(html);
-          // フォームのhidden textareaにも同期
           if (typeof inst.updateElement === 'function') {
             inst.updateElement();
           }
@@ -227,134 +222,27 @@ async function injectEditorContent(page, fullHtml) {
     await page.waitForTimeout(1000);
     return true;
   }
-  console.log('[エディタ] CKEditorインスタンスが見つかりません。他の方式を試行します。');
 
-  // --- 方式2: HTML表示モード（ソースモード）のtextarea ---
   console.log('[エディタ] 方式2: HTML表示モード（textarea）を試行中...');
   const sourceBtn = page.locator('button#js-editorModeButton--source, button:has-text("HTML表示"), button:has-text("HTML編集"), [data-testid="source-mode-button"]').first();
   const sourceBtnVisible = await sourceBtn.isVisible().catch(() => false);
   if (sourceBtnVisible) {
     await sourceBtn.click();
     await page.waitForTimeout(2000);
-    console.log('[エディタ] HTML表示ボタンをクリックしました。');
   }
 
-  const textareaSelectors = [
-    'textarea.cke_source',
-    'textarea#amebloeditor',
-    'textarea[name="entry_text"]',
-    '#entryText',
-    'textarea[class*="source"]'
-  ];
+  const textareaSelectors = ['textarea.cke_source', 'textarea#amebloeditor', 'textarea[name="entry_text"]', '#entryText'];
   for (const sel of textareaSelectors) {
     const textarea = page.locator(sel).first();
-    const visible = await textarea.isVisible().catch(() => false);
-    if (visible) {
-      console.log(`[エディタ] textarea検出: ${sel}`);
+    if (await textarea.isVisible().catch(() => false)) {
       await textarea.click();
       await textarea.fill(fullHtml);
       await page.waitForTimeout(500);
       const val = await textarea.inputValue().catch(() => '');
-      if (val.length > 10) {
-        console.log(`[エディタ] 方式2成功: textarea(${sel})に ${val.length} 文字入力完了`);
-        return true;
-      }
+      if (val.length > 10) return true;
     }
   }
 
-  // 通常モードに戻す
-  if (sourceBtnVisible) {
-    const normalBtn = page.locator('button:has-text("通常表示"), button:has-text("通常編集"), button#js-editorModeButton--normal').first();
-    if (await normalBtn.isVisible().catch(() => false)) {
-      await normalBtn.click();
-      await page.waitForTimeout(2000);
-    }
-  }
-
-  // --- 方式3: iframe内contenteditable + CKEditor同期 ---
-  console.log('[エディタ] 方式3: iframe + contenteditable + CKEditor同期 を試行中...');
-  const iframeSelectors = [
-    'iframe.cke_wysiwyg_frame',
-    '#cke_1_contents iframe',
-    '.cke_contents iframe',
-    'iframe[class*="editor"]'
-  ];
-
-  for (const iframeSel of iframeSelectors) {
-    try {
-      const iframeEl = page.locator(iframeSel).first();
-      if (await iframeEl.isVisible().catch(() => false)) {
-        console.log(`[エディタ] iframe検出: ${iframeSel}`);
-        const frame = page.frameLocator(iframeSel).first();
-        const body = frame.locator('body[contenteditable="true"], body.cke_editable, body');
-        if (await body.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-          await body.first().evaluate((el, html) => {
-            el.innerHTML = html;
-          }, fullHtml);
-          await page.waitForTimeout(500);
-
-          // iframeにHTML注入した後、CKEditorの内部データモデルも同期
-          const synced = await page.evaluate((html) => {
-            if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
-              for (const name in CKEDITOR.instances) {
-                CKEDITOR.instances[name].setData(html);
-                if (typeof CKEDITOR.instances[name].updateElement === 'function') {
-                  CKEDITOR.instances[name].updateElement();
-                }
-              }
-              return true;
-            }
-            // CKEditorが無い場合、隠しtextareaに直接書き込む
-            const ta = document.querySelector('textarea[name="entry_text"]');
-            if (ta) {
-              ta.value = html;
-              ta.dispatchEvent(new Event('change', { bubbles: true }));
-              return true;
-            }
-            return false;
-          }, fullHtml).catch(() => false);
-
-          const len = await body.first().evaluate(el => el.innerHTML.length).catch(() => 0);
-          console.log(`[エディタ] 方式3: iframe注入 ${len} 文字, CKEditor同期: ${synced ? '成功' : '失敗'}`);
-          if (len > 10) {
-            return true;
-          }
-        }
-      }
-    } catch (e) {
-      console.log(`[エディタ] iframe(${iframeSel})へのアクセス失敗: ${e.message}`);
-    }
-  }
-
-  // --- 方式4: hidden textarea直接書き込み ---
-  console.log('[エディタ] 方式4: hidden textarea直接書き込みを試行中...');
-  const injected = await page.evaluate((html) => {
-    let success = false;
-    const targets = document.querySelectorAll('textarea[name="entry_text"], #entryText, #entry_text');
-    targets.forEach(el => {
-      el.value = html;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      success = true;
-    });
-    return success;
-  }, fullHtml).catch(() => false);
-
-  if (injected) {
-    console.log('[エディタ] 方式4成功: hidden textarea に直接書き込みました。');
-    return true;
-  }
-
-  // デバッグ: エディタDOM構造をダンプ
-  console.error('[エディタ] 全方式失敗。エディタDOM構造をダンプします...');
-  const debugInfo = await page.evaluate(() => {
-    const iframes = [...document.querySelectorAll('iframe')].map(f => ({ tag: 'iframe', id: f.id, class: f.className, src: f.src, title: f.title }));
-    const textareas = [...document.querySelectorAll('textarea')].map(t => ({ tag: 'textarea', id: t.id, name: t.name, class: t.className, visible: t.offsetParent !== null }));
-    const editables = [...document.querySelectorAll('[contenteditable]')].map(e => ({ tag: e.tagName, id: e.id, class: e.className, role: e.getAttribute('role') }));
-    const hasCKE = typeof CKEDITOR !== 'undefined';
-    return { iframes, textareas, editables, hasCKEditor: hasCKE };
-  }).catch(() => ({}));
-  console.error('[エディタ] DOM構造:', JSON.stringify(debugInfo, null, 2));
   return false;
 }
 
@@ -395,7 +283,6 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(5000);
 
-    // ログイン画面にリダイレクトされたか判定
     if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin') || page.url().includes('/login')) {
       console.log('ログインセッションが無効です。ID/パスワードによるログインを試みます...');
       if (!amebaId || !amebaPassword) {
@@ -403,8 +290,6 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       }
 
       await page.goto('https://dauth.user.ameba.jp/login/ameba', { waitUntil: 'domcontentloaded' });
-      console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
-
       const fillFormInput = async (selector, value) => {
         const locator = page.locator(selector).first();
         await locator.waitFor({ state: 'visible', timeout: 15000 });
@@ -427,24 +312,10 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       await fillFormInput('input[name="accountId"], #accountId', amebaId);
       await fillFormInput('input[name="password"], #password', amebaPassword);
 
-      console.log('ログインボタンを押下中...');
       const submitBtn = page.locator('button.js-submit-button, button[type="submit"], input[type="submit"]').first();
       await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
       await submitBtn.click();
-      await page.keyboard.press('Enter').catch(() => {});
       await page.waitForTimeout(5000);
-
-      for (let i = 0; i < 10; i++) {
-        await page.waitForTimeout(1000);
-        const curUrl = page.url();
-        if (!curUrl.includes('/signin') && !curUrl.includes('/login') && curUrl.includes('ameba.jp')) {
-          break;
-        }
-      }
-
-      if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-        throw new Error('Amebaログイン認証に失敗しました。Googleログイン専用アカウントの場合はCookie（AMEBA_COOKIES）をSecretに設定してください。');
-      }
 
       await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(5000);
@@ -453,14 +324,12 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     console.log('エディタ画面URL:', page.url());
     console.log('エディタ画面タイトル:', await page.title());
 
-    // --- タイトル入力 ---
     console.log('記事タイトルを入力中...');
     const titleInput = page.locator('input[name="entry_title"], #entryTitle, textarea[data-testid="entry-title-input"]').first();
     await titleInput.waitFor({ state: 'visible', timeout: 30000 });
     await titleInput.fill(title);
     console.log(`タイトル「${title}」を入力しました。`);
 
-    // --- 楽天アフィリエイトカード生成 ---
     const rakutenHtml = `
       <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
         ${itemInfo.imageUrl ? `<a href="${itemInfo.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${itemInfo.imageUrl}" alt="${title}" style="max-width: 120px; height: auto; border-radius: 4px;" /></a>` : ''}
@@ -473,19 +342,15 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     `;
     const fullHtml = contentHtml + rakutenHtml;
 
-    // --- 本文HTML入力（複数方式試行） ---
     console.log('本文HTMLを入力中...');
     const editorSuccess = await injectEditorContent(page, fullHtml);
     if (!editorSuccess) {
-      throw new Error('エディタへの本文入力に全方式で失敗しました。Amebaのエディタ仕様が変更された可能性があります。');
+      throw new Error('エディタへの本文入力に全方式で失敗しました。');
     }
 
-    // --- ハッシュタグ設定（モーダル開下を避け、直注入） ---
     console.log('ハッシュタグを設定中...');
     const formattedTags = tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
-    
     await page.evaluate((tagStr) => {
-      // 1. Amebaフォームの隠しinput[name="hashtag"]へ直接注入
       const tagInput = document.querySelector('input[name="hashtag"], #js-hashtag-input');
       if (tagInput) {
         tagInput.value = tagStr;
@@ -494,30 +359,11 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       }
     }, formattedTags).catch(() => {});
 
-    // もし入力フィールドが画面上に直接見えている場合のみfill
-    const directTagInput = page.locator('input[data-testid="hashtag-input"]').first();
-    if (await directTagInput.isVisible().catch(() => false)) {
-      for (const tag of tags) {
-        await directTagInput.fill(tag).catch(() => {});
-        await directTagInput.press('Enter').catch(() => {});
-      }
-    }
-
-    // モーダルが誤って開いていた場合に備えて完全に閉じる
-    await page.evaluate(() => {
-      const fixBtn = document.querySelector('#js-hashtag-fixButton, .p-hashtag__modal__submit');
-      if (fixBtn) fixBtn.click();
-      const closeBtns = document.querySelectorAll('.c-modal__close, [class*="close"]');
-      closeBtns.forEach(b => b.click());
-    }).catch(() => {});
-
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
-    // --- 安全対策: テスト時は待機なし（完全スキップ） ---
     console.log('テスト実行のため、投稿前待機をスキップします。');
 
-    // --- 投稿前にCKEditorデータをフォームに同期 ---
     console.log('CKEditorデータをフォームに同期中...');
     const syncResult = await page.evaluate(() => {
       const result = { ckeSync: false, textareaLen: 0 };
@@ -533,99 +379,76 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     }).catch(() => ({ ckeSync: false, textareaLen: 0 }));
     console.log(`CKEditor同期: ${syncResult.ckeSync}, hidden textarea長: ${syncResult.textareaLen} 文字`);
 
-    if (syncResult.textareaLen < 10) {
-      console.warn('hidden textareaが空です。直接書き込みます...');
-      await page.evaluate((html) => {
-        const ta = document.querySelector('textarea[name="entry_text"]');
-        if (ta) {
-          ta.value = html;
-          ta.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }, fullHtml).catch(() => {});
-    }
-    await page.waitForTimeout(500);
-
     // --- AMEBA フォームの確定と送信処理 ---
     console.log('「投稿する」処理を実行中...');
-    
-    // 画面上に存在するすべての「投稿する」「投稿」ボタンの検索と評価
-    const btnInfo = await page.evaluate(() => {
-      const allBtns = [...document.querySelectorAll('button, input[type="submit"], a.js-submitButton')];
-      return allBtns.map(b => ({
-        tagName: b.tagName,
-        type: b.type,
-        text: b.innerText?.trim() || b.value || '',
-        id: b.id,
-        className: b.className,
-        disabled: b.disabled,
-        visible: !!(b.offsetWidth || b.offsetHeight || b.getClientRects().length)
-      })).filter(b => b.text.includes('投稿') || b.className.includes('submit'));
-    }).catch(() => []);
-    console.log('検出された投稿関連ボタン:', JSON.stringify(btnInfo, null, 2));
-
-    // Playwrightでの確実な「投稿する」ボタン選択
     const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
     const isPostBtnVisible = await postBtn.isVisible().catch(() => false);
 
     if (isPostBtnVisible) {
       console.log('Playwright: 「投稿する」ボタンを検出しました。スクロールとクリックを実行します...');
       await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-      await postBtn.click({ force: true }).catch(async (e) => {
-        console.log('通常のclickが弾かれたため、evaluate(click)を実行します:', e.message);
+      await postBtn.click({ force: true }).catch(async () => {
         await postBtn.evaluate(b => b.click());
       });
 
-      console.log('「投稿する」ボタンをクリックしました。モーダルや確認ダイアログの表示をチェック中...');
+      console.log('「投稿する」ボタンをクリックしました。モーダルのアニメーション完了を待機中...');
       await page.waitForTimeout(2000);
 
-      // --- CoverConfirmModal（カバー画像・投稿確認モーダル）の確実な承認処理 ---
-      console.log('モーダルのアニメーション完了を待機中...');
-      await page.waitForTimeout(1500);
+      // モーダル内のすべての要素とボタン構造を詳細ログ出力
+      const modalElementsDebug = await page.evaluate(() => {
+        const modal = document.querySelector('.CoverConfirmModal, .ucsCommonModal');
+        if (!modal) return 'モーダルが見つかりません';
+        const els = [...modal.querySelectorAll('button, a, div, span, input')];
+        return els.map(e => ({
+          tag: e.tagName,
+          class: e.className?.slice?.(0, 50) || '',
+          text: e.innerText?.trim()?.slice?.(0, 30) || '',
+          id: e.id || ''
+        })).filter(e => e.text.length > 0);
+      }).catch(() => []);
+      console.log('モーダル内全要素一覧:', JSON.stringify(modalElementsDebug, null, 2));
 
-      const coverBtn = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿"), .CoverConfirmModal button:has-text("このまま投稿"), .CoverConfirmModal button:has-text("設定せずに投稿")').first();
-
-      if (await coverBtn.isVisible().catch(() => false)) {
-        const coverTxt = await coverBtn.innerText().catch(() => '');
-        console.log(`【判定成功】確認モーダルボタン [${coverTxt}] を検出しました。3重発火で投稿を確定します！`);
+      // タグ名を問わず「カバーなしで投稿」「このまま投稿」「設定せずに投稿」のテキストを持つ要素を全探索して直接クリック
+      const targetElementClicked = await page.evaluate(() => {
+        const modal = document.querySelector('.CoverConfirmModal, .ucsCommonModal') || document.body;
+        const allElements = [...modal.querySelectorAll('button, a, span, div, input')];
         
-        // 1. スクロール＆フォーカス
-        await coverBtn.scrollIntoViewIfNeeded().catch(() => {});
-        await coverBtn.focus().catch(() => {});
+        let target = allElements.find(e => e.innerText?.trim()?.includes('カバーなしで投稿'));
+        if (!target) {
+          target = allElements.find(e => e.innerText?.trim()?.includes('設定せずに投稿') || e.innerText?.trim()?.includes('このまま投稿'));
+        }
+        if (!target) {
+          target = allElements.find(e => e.tagName === 'BUTTON' && e.innerText?.trim()?.includes('投稿'));
+        }
 
-        // 2. Playwright直接クリック
-        await coverBtn.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(300);
+        if (target) {
+          const text = target.innerText?.trim();
+          const parentBtn = target.closest('button') || target.closest('a') || target;
+          
+          parentBtn.click();
+          parentBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+          parentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          parentBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+          parentBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          return { success: true, text: text, tag: parentBtn.tagName };
+        }
+        return { success: false };
+      }).catch((err) => ({ success: false, error: err.message }));
 
-        // 3. JSレベルでのClick & MouseEventバブリング発火
-        await coverBtn.evaluate((b) => {
-          b.disabled = false;
-          b.click();
-          b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-        }).catch(() => {});
-        await page.waitForTimeout(300);
+      console.log('モーダル要素クリック実行結果:', JSON.stringify(targetElementClicked));
 
-        // 4. キーボード Enter 押下
-        await page.keyboard.press('Enter').catch(() => {});
-        
-        console.log('投稿完了画面への遷移を待機中...');
+      if (targetElementClicked.success) {
+        console.log(`【確定成功】モーダル要素 [${targetElementClicked.text}] (${targetElementClicked.tag}) を直接クリックしました！`);
+        console.log('投稿完了画面への遷移を25秒間待機中...');
         await page.waitForNavigation({ timeout: 25000 }).catch(() => {});
         await page.waitForTimeout(4000);
       } else {
-        console.log('「カバーなしで投稿する」ボタンが直接見つからないため、モーダル内全ボタンを検索します...');
-        const modalBtns = page.locator('.CoverConfirmModal button');
-        const count = await modalBtns.count().catch(() => 0);
-        if (count > 0) {
-          for (let i = 0; i < count; i++) {
-            const btn = modalBtns.nth(i);
-            if (await btn.isVisible().catch(() => false)) {
-              const txt = await btn.innerText().catch(() => '');
-              console.log(`モーダル内ボタン検出: (${txt}) -> クリック`);
-              await btn.click({ force: true }).catch(() => {});
-              await btn.evaluate(b => b.click()).catch(() => {});
-              await page.waitForTimeout(3000);
-              break;
-            }
-          }
+        console.log('モーダル要素の自動検出に失敗。Playwrightの直接ロケータで試行します...');
+        const coverBtn = page.locator('*:has-text("カバーなしで投稿")').first();
+        if (await coverBtn.isVisible().catch(() => false)) {
+          await coverBtn.click({ force: true }).catch(() => {});
+          await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
+          await page.waitForTimeout(3000);
         }
       }
     }
@@ -634,12 +457,10 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     let currentUrl = page.url();
     console.log('1次試行後のURL:', currentUrl);
 
-    // 遷移しなかった場合、JS側で「投稿する」テキストを持つボタンまたはモーダル内ボタンのみを正確に指定
     if (currentUrl.includes('srventryinsertinput.do')) {
       console.log('まだ投稿入力画面です。JSによる正確な「投稿する」ボタンクリックを発行します...');
 
       const jsSubmitResult = await page.evaluate(() => {
-        // 「下書き保存」を除外し、明確に「投稿する」というテキストのみを持つボタンを検索
         const allBtns = [...document.querySelectorAll('button, input[type="submit"]')];
         const postBtn = allBtns.find(b => b.innerText?.trim() === '投稿する' || b.value === '投稿する');
 
@@ -648,7 +469,6 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
           return { type: 'exact_post_click', text: postBtn.innerText };
         }
 
-        // モーダル内のボタンを探す
         const modalBtn = document.querySelector('.CoverConfirmModal button, .ucsCommonModal button');
         if (modalBtn) {
           modalBtn.click();
@@ -668,7 +488,6 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     if (currentUrl.includes('entryend') || currentUrl.includes('complete') || !currentUrl.includes('srventryinsertinput.do')) {
       console.log('【投稿成功】記事の投稿完了画面への遷移を確認しました！');
     } else {
-      // 送信されなかった原因特定のため、画面上に表示されているエラーメッセージやモーダルテキストを収集
       const pageDiagnostics = await page.evaluate(() => {
         const errors = [...document.querySelectorAll('.c-errorMessage, [class*="error"], [class*="Error"], [class*="alert"], .spui-Text--danger')]
           .map(el => el.innerText?.trim())
