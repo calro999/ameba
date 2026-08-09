@@ -480,27 +480,37 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       throw new Error('エディタへの本文入力に全方式で失敗しました。Amebaのエディタ仕様が変更された可能性があります。');
     }
 
-    // --- ハッシュタグ入力 ---
-    console.log('ハッシュタグ入力中...');
-    for (const tag of tags) {
-      const tagInput = page.locator('input[placeholder*="ハッシュタグ"], input[data-testid="hashtag-input"], #js-hashtag-button').first();
-      if (await tagInput.isVisible().catch(() => false)) {
-        await tagInput.fill(tag).catch(() => {});
-        await tagInput.press('Enter').catch(() => {});
-        await sleep(500);
+    // --- ハッシュタグ設定（モーダル開下を避け、直注入） ---
+    console.log('ハッシュタグを設定中...');
+    const formattedTags = tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
+    
+    await page.evaluate((tagStr) => {
+      // 1. Amebaフォームの隠しinput[name="hashtag"]へ直接注入
+      const tagInput = document.querySelector('input[name="hashtag"], #js-hashtag-input');
+      if (tagInput) {
+        tagInput.value = tagStr;
+        tagInput.dispatchEvent(new Event('input', { bubbles: true }));
+        tagInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, formattedTags).catch(() => {});
+
+    // もし入力フィールドが画面上に直接見えている場合のみfill
+    const directTagInput = page.locator('input[data-testid="hashtag-input"]').first();
+    if (await directTagInput.isVisible().catch(() => false)) {
+      for (const tag of tags) {
+        await directTagInput.fill(tag).catch(() => {});
+        await directTagInput.press('Enter').catch(() => {});
       }
     }
 
-    // ハッシュタグモーダルの「決定」ボタンがあれば確実にクリックして閉じる
-    const tagConfirmBtn = page.locator('#js-hashtag-fixButton, .p-hashtag__modal__submit, button:has-text("決定")').first();
-    if (await tagConfirmBtn.isVisible().catch(() => false)) {
-      console.log('ハッシュタグモーダルの「決定」ボタンをクリックしてモーダルを閉じます...');
-      await tagConfirmBtn.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(1000);
-    }
+    // モーダルが誤って開いていた場合に備えて完全に閉じる
+    await page.evaluate(() => {
+      const fixBtn = document.querySelector('#js-hashtag-fixButton, .p-hashtag__modal__submit');
+      if (fixBtn) fixBtn.click();
+      const closeBtns = document.querySelectorAll('.c-modal__close, [class*="close"]');
+      closeBtns.forEach(b => b.click());
+    }).catch(() => {});
 
-    // 残存しているモーダルやオーバーレイをEscapeでクリア
-    await page.keyboard.press('Escape').catch(() => {});
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
