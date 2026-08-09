@@ -507,13 +507,6 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
   } finally {
     await browser.close();
   }
-
-  } catch (error) {
-    console.error('投稿処理エラー:', error);
-    throw error;
-  } finally {
-    await browser.close();
-  }
 }
 
 // メイン処理
