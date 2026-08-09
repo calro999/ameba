@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { chromium } from 'playwright';
 import 'dotenv/config';
-
 import fs from 'fs';
 
 // ユーティリティ: 指定ミリ秒待機
@@ -91,7 +90,7 @@ ${profileContent}
 }
 `;
 
-    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
+    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
     const genAI = new GoogleGenerativeAI(apiKey);
 
     for (const modelName of models) {
@@ -105,8 +104,8 @@ ${profileContent}
         } catch (err) {
           console.log(`[Gemini API (${modelName}) 試行 ${attempt}] エラー: ${err.message}`);
           if (err.message.includes('429') || err.message.includes('Quota exceeded')) {
-            console.log('レート制限が検出されました。5秒待機して次のモデル/試行に移ります...');
-            await sleep(5000);
+            console.log('レート制限が検出されました。3秒待機してリトライします...');
+            await sleep(3000);
           } else {
             break;
           }
@@ -192,29 +191,41 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
     const accountInput = page.locator('input[name="accountId"], #accountId').first();
     await accountInput.waitFor({ state: 'visible', timeout: 15000 });
-    await accountInput.focus();
-    await accountInput.pressSequentially(amebaId, { delay: 100 });
+    await accountInput.fill(amebaId);
 
     const passwordInput = page.locator('input[name="password"], #password').first();
-    await passwordInput.focus();
-    await passwordInput.pressSequentially(amebaPassword, { delay: 100 });
-    await page.waitForTimeout(1000);
+    await passwordInput.fill(amebaPassword);
+    await page.waitForTimeout(500);
 
     console.log('ログインボタンを押下中...');
-    const submitBtn = page.locator('button.js-submit-button, button[type="submit"]').first();
+    const submitBtn = page.locator('button.js-submit-button, button[type="submit"], input[type="submit"]').first();
     await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await submitBtn.click({ force: true });
+
+    await page.evaluate(() => {
+      const form = document.querySelector('form');
+      if (form && form.requestSubmit) form.requestSubmit();
+      else if (form) form.submit();
+    }).catch(() => {});
+
+    await submitBtn.click({ force: true }).catch(() => {});
     await page.keyboard.press('Enter').catch(() => {});
-    await page.waitForTimeout(6000);
+
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(1000);
+      const curUrl = page.url();
+      if (!curUrl.includes('/signin') && !curUrl.includes('/login') && curUrl.includes('ameba.jp')) {
+        break;
+      }
+    }
 
     console.log('ログイン後URL:', page.url());
 
     if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-      const pageErrors = await page.locator('[class*="error"], [class*="Error"], p, span').allInnerTexts().catch(() => []);
-      const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('お困りの方')));
+      const pageErrors = await page.locator('[class*="error"], [class*="Error"], .c-errorMessage, #error-msg, p').allInnerTexts().catch(() => []);
+      const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && !t.includes('お困りの方') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('入力してください') || t.includes('失敗')));
       const errorMsg = realErrors.join(' | ');
-      console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（IDまたはパスワードが不正です）');
-      throw new Error(`Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください（※ AMEBA_ID は「ブログID」ではなく「ログイン用ID」または「登録メールアドレス」を指定してください）。`);
+      console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（パスワード不一致またはGoogleログイン専用アカウントの可能性があります）');
+      throw new Error(`Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください（※「Googleでログイン」で作成されたアカウントの場合、Ameba画面でパスワードの新規設定が必要です）。`);
     }
 
     console.log('ブログエディタ画面へ移動中...');
@@ -241,22 +252,22 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
 
     // 楽天アフィリエイトカード（画像＋リンク）の生成
     const rakutenHtml = `
-<br>
-<div style="border: 1px solid #e0e0e0; padding: 15px; margin: 15px 0; border-radius: 8px; background-color: #fafafa; text-align: center;">
-  <a href="${itemInfo.itemUrl}" target="_blank" rel="noopener" style="text-decoration: none;">
-    <img src="${itemInfo.imageUrl}" alt="${itemInfo.itemName}" style="max-width: 200px; height: auto; border-radius: 4px;" />
-    <p style="margin-top: 10px; color: #333; font-weight: bold; font-size: 14px;">${itemInfo.itemName}</p>
-    <p style="color: #bf0000; font-weight: bold; font-size: 16px;">価格: ${itemInfo.price.toLocaleString()}円</p>
-    <span style="display: inline-block; padding: 8px 16px; background-color: #bf0000; color: #fff; border-radius: 4px; font-weight: bold; margin-top: 5px;">楽天で詳細を見る</span>
-  </a>
-</div>`;
+      <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
+        ${itemInfo.imageUrl ? `<a href="${itemInfo.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${itemInfo.imageUrl}" alt="${title}" style="max-width: 120px; height: auto; border-radius: 4px;" /></a>` : ''}
+        <div>
+          <h4 style="margin: 0 0 8px 0; font-size: 16px;"><a href="${itemInfo.itemUrl}" target="_blank" rel="nofollow noopener" style="color: #333; text-decoration: none;">${itemInfo.itemName}</a></h4>
+          <p style="margin: 0 0 8px 0; color: #bf0000; font-weight: bold;">価格: ${itemInfo.price.toLocaleString()}円 (税込)</p>
+          <a href="${itemInfo.itemUrl}" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #bf0000; color: #fff; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: bold;">楽天市場で詳細を見る</a>
+        </div>
+      </div>
+    `;
 
     const fullHtml = contentHtml + rakutenHtml;
 
     console.log('HTML表示モードに切り替え中...');
-    const htmlTab = page.locator('button#js-editorModeButton--source, button[data-mode="source"]').first();
-    if (await htmlTab.isVisible().catch(() => false)) {
-      await htmlTab.click();
+    const sourceBtn = page.locator('button#js-editorModeButton--source, button:has-text("HTML表示")').first();
+    if (await sourceBtn.isVisible().catch(() => false)) {
+      await sourceBtn.click();
       await page.waitForTimeout(1000);
     }
 
