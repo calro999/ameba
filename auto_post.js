@@ -72,6 +72,41 @@ function cleanProductName(name) {
     .slice(0, 30); // 読みやすいように30文字以内に整形
 }
 
+// 2つの商品が同じメーカー・同一型番・同製品の別ショップ出品でないかチェックする判定関数
+function areItemsTooSimilar(itemA, itemB) {
+  const nameA = itemA.itemName;
+  const nameB = itemB.itemName;
+  const cleanA = cleanProductName(nameA);
+  const cleanB = cleanProductName(nameB);
+
+  // 1. 完全一致
+  if (cleanA === cleanB) return true;
+
+  // 2. 代表的なブランド・メーカー名の抽出と一致チェック
+  const brands = [
+    'アイリスオーヤマ', '山善', 'YAMAZEN', 'タイジ', 'レコルト', 'recolte',
+    'プエル', 'BRUNO', 'ブルーノ', '象印', 'ZOJIRUSHI', 'パナソニック', 'Panasonic',
+    'ライソン', 'LITHON', '岩谷', 'イワタニ', 'Iwatani', 'タイガー', 'TIGER',
+    'コイズミ', 'KOIZUMI', 'テスコム', 'TESCOM', 'ヒロコーポレーション'
+  ];
+
+  for (const b of brands) {
+    if (nameA.toUpperCase().includes(b.toUpperCase()) && nameB.toUpperCase().includes(b.toUpperCase())) {
+      return true; // 同じメーカー同士なら類似とみなして再選出
+    }
+  }
+
+  // 3. 型番の共通部分チェック (例: PTY-24-R など)
+  const modelRegex = /[A-Z0-9]{3,}-[A-Z0-9]{2,}/gi;
+  const modelsA = nameA.match(modelRegex) || [];
+  const modelsB = nameB.match(modelRegex) || [];
+  for (const mA of modelsA) {
+    if (modelsB.includes(mA)) return true;
+  }
+
+  return false;
+}
+
 // 1. 楽天APIから2つの異なるメイン商品情報（比較用）とアフィリエイトリンクを取得
 async function fetchRakutenItemPair(keyword) {
   const appId = process.env.RAKUTEN_APPLICATION_ID;
@@ -110,19 +145,34 @@ async function fetchRakutenItemPair(keyword) {
   // ② 過去に投稿されていない商品に絞る
   const availableItems = mainProducts.filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
 
-  // 候補数が足りない場合はmainProducts全体から選択
   const pool = availableItems.length >= 2 ? availableItems : (mainProducts.length >= 2 ? mainProducts : data.Items);
 
   if (pool.length < 2) return null;
 
-  // ランダムに2件選択
+  // 商品Aを選択
   const shuffle = pool.sort(() => 0.5 - Math.random());
   const itemA = shuffle[0].Item;
-  const itemB = shuffle[1].Item;
+
+  // 商品Aと「メーカーも型番も異なる」商品Bを探す
+  let itemB = null;
+  for (let i = 1; i < shuffle.length; i++) {
+    const candidate = shuffle[i].Item;
+    if (!areItemsTooSimilar(itemA, candidate)) {
+      itemB = candidate;
+      break;
+    }
+  }
+
+  // もし異メーカーが見つからなければ、2番目の候補をフォールバック使用
+  if (!itemB) {
+    itemB = shuffle[1].Item;
+  }
 
   // 投稿済みリストに保存
   savePostedItem(itemA.affiliateUrl || itemA.itemUrl);
   savePostedItem(itemB.affiliateUrl || itemB.itemUrl);
+
+  console.log(`[比較対決設定] 商品A: ${itemA.itemName.slice(0, 25)} VS 商品B: ${itemB.itemName.slice(0, 25)}`);
 
   return {
     itemA: {
