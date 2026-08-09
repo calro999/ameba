@@ -1,0 +1,36 @@
+name: Ameba Auto Post Scheduler
+
+on:
+  schedule:
+    # 1時間ごとに実行 (UTC時間 毎時0分)
+    - cron: '0 * * * *'
+  workflow_dispatch: # GitHub画面から手動実行可能にするボタン
+
+jobs:
+  auto-post:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js のセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 依存パッケージのインストール
+        run: npm ci
+
+      - name: Playwrightブラウザのインストール
+        run: npx playwright install --with-deps chromium
+
+      - name: Ameba自動投稿の実行
+        env:
+          AMEBA_ID: ${{ secrets.AMEBA_ID }}
+          AMEBA_PASSWORD: ${{ secrets.AMEBA_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+          RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+        run: node auto_post.js
