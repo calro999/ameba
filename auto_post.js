@@ -427,25 +427,18 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
     }).catch(() => {});
     await page.waitForTimeout(500);
 
-    // --- AMEBA フォーム送信＆公開確定処理 ---
+    // --- AMEBA 投稿・全員に公開の確定フロー ---
     console.log('「全員に公開（投稿）」処理を実行中...');
 
-    // 1. Amebaのメイン送信フォーム (srventryinsertend.do) を直接キックして確実に公開画面へ遷移
-    const directSubmitSuccess = await page.evaluate(() => {
-      // CKEditorデータを隠しtextareaに同期
+    // 1. 事前にフォーム内の publish_flg を "1" (全員に公開) に固定
+    await page.evaluate(() => {
       if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
         for (const name in CKEDITOR.instances) {
           CKEDITOR.instances[name].updateElement();
         }
       }
-
-      // 投稿フォームを取得
-      const form = document.querySelector('form[action*="srventryinsertend.do"]') || 
-                   document.querySelector('form[name="entryForm"]') ||
-                   document.forms[0];
-
-      if (form) {
-        // publish_flg (公開フラグ) を 1 (=全員に公開) に固定設定
+      const forms = document.forms;
+      for (const form of forms) {
         let pubInput = form.querySelector('input[name="publish_flg"]');
         if (!pubInput) {
           pubInput = document.createElement('input');
@@ -454,46 +447,68 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
           form.appendChild(pubInput);
         }
         pubInput.value = '1';
-
-        // フォームを直接送信
-        form.submit();
-        return true;
       }
-      return false;
-    }).catch(() => false);
+    }).catch(() => {});
 
-    console.log(`直接フォーム送信キック: ${directSubmitSuccess}`);
+    // 2. Amebaエディタの「投稿する」ボタンを探索して物理クリック
+    const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
+    await postBtn.waitFor({ state: 'visible', timeout: 15000 });
+    console.log('「投稿する」ボタンをクリックします...');
+    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await postBtn.click({ force: true }).catch(async () => {
+      await postBtn.evaluate(b => b.click());
+    });
 
-    // ナビゲーション待機
-    await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
-    await page.waitForTimeout(3000);
+    console.log('ボタンクリック完了。カバー画像モーダル（CoverConfirmModal）の表示を待機中...');
+    await page.waitForTimeout(2500);
 
-    let curUrl = page.url();
-    console.log('直接送信後のURL:', curUrl);
+    // 3. カバー画像確認モーダルが出た場合、「カバーなしで投稿する」ボタンを精密物理クリック
+    const coverBtnLocator = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿"), button:has-text("カバーなしで投稿する"), button:has-text("設定せずに投稿")').first();
+    if (await coverBtnLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
+      console.log('【モーダル検知】「カバーなしで投稿する」ボタンをクリックします...');
+      await coverBtnLocator.scrollIntoViewIfNeeded().catch(() => {});
+      await coverBtnLocator.click({ force: true }).catch(async () => {
+        await coverBtnLocator.evaluate(b => b.click());
+      });
+      await page.keyboard.press('Enter').catch(() => {});
+    } else {
+      console.log('モーダル非表示、またはダイレクト送信モードです。');
+    }
 
-    // まだ遷移していなければ Playwright で「投稿する」ボタンを押してダイアログを処理
-    if (curUrl.includes('srventryinsertinput.do')) {
-      console.log('Playwright経由で「投稿する」ボタンを直接クリックします...');
-      const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
-      if (await postBtn.isVisible().catch(() => false)) {
-        await postBtn.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(2000);
+    console.log('投稿完了画面（entryend.do）への遷移を監視中（最大30秒）...');
+    
+    // URLの遷移を毎秒チェック
+    let isPosted = false;
+    for (let i = 0; i < 30; i++) {
+      await page.waitForTimeout(1000);
+      const url = page.url();
+      if (url.includes('entryend') || url.includes('complete') || !url.includes('srventryinsertinput.do')) {
+        isPosted = true;
+        console.log(`【投稿成功検知】 URL: ${url}`);
+        break;
+      }
+    }
 
-        // カバー確認モーダルが出た場合「カバーなしで投稿する」を直押し
-        const coverBtn = page.locator('*:has-text("カバーなしで投稿"), *:has-text("設定せずに投稿")').first();
-        if (await coverBtn.isVisible().catch(() => false)) {
-          await coverBtn.click({ force: true }).catch(() => {});
+    // もし画面が遷移しなかった場合、JSレベルで送信イベント(submit)を発火
+    if (!isPosted) {
+      console.log('画面が遷移していません。JSイベント(submit)を発火して強制公開します...');
+      await page.evaluate(() => {
+        const form = document.querySelector('form[action*="srventryinsertend.do"]') || document.forms[0];
+        if (form) {
+          let pubInput = form.querySelector('input[name="publish_flg"]');
+          if (pubInput) pubInput.value = '1';
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          form.submit();
         }
-        await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
-        await page.waitForTimeout(3000);
-      }
+      }).catch(() => {});
+      await page.waitForTimeout(5000);
     }
 
     const finalUrl = page.url();
     console.log('最終確定URL:', finalUrl);
 
     if (finalUrl.includes('entryend') || finalUrl.includes('complete') || !finalUrl.includes('srventryinsertinput.do')) {
-      console.log('【祝・投稿成功】Amebaブログへの記事投稿完了（公開）を確認しました！');
+      console.log('【祝・投稿成功】Amebaブログへの記事投稿完了（全員に公開）を確認しました！');
     } else {
       throw new Error(`投稿画面からの遷移に失敗しました。現在のURL: ${finalUrl}`);
     }
