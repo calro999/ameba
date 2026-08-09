@@ -189,26 +189,36 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     await page.goto('https://dauth.user.ameba.jp/login/ameba', { waitUntil: 'domcontentloaded' });
 
     console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
-    const accountInput = page.locator('input[name="accountId"], #accountId').first();
-    await accountInput.waitFor({ state: 'visible', timeout: 15000 });
-    await accountInput.fill(amebaId);
+    
+    // React/Next.jsフォームのState更新を確定させる入力処理
+    const fillFormInput = async (selector, value) => {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: 15000 });
+      await locator.click();
+      await locator.focus();
+      await locator.fill(value);
+      await locator.evaluate((el, val) => {
+        const tracker = el._valueTracker;
+        if (tracker) tracker.setValue(val);
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(el, val);
+        else el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
+      }, value);
+      await page.waitForTimeout(300);
+    };
 
-    const passwordInput = page.locator('input[name="password"], #password').first();
-    await passwordInput.fill(amebaPassword);
-    await page.waitForTimeout(500);
+    await fillFormInput('input[name="accountId"], #accountId', amebaId);
+    await fillFormInput('input[name="password"], #password', amebaPassword);
 
     console.log('ログインボタンを押下中...');
     const submitBtn = page.locator('button.js-submit-button, button[type="submit"], input[type="submit"]').first();
     await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
-
-    await page.evaluate(() => {
-      const form = document.querySelector('form');
-      if (form && form.requestSubmit) form.requestSubmit();
-      else if (form) form.submit();
-    }).catch(() => {});
-
-    await submitBtn.click({ force: true }).catch(() => {});
+    await submitBtn.click();
     await page.keyboard.press('Enter').catch(() => {});
+    await page.waitForTimeout(5000);
 
     for (let i = 0; i < 10; i++) {
       await page.waitForTimeout(1000);
