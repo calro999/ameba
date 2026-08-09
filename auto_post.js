@@ -579,24 +579,39 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       await page.waitForTimeout(2000);
 
       // --- CoverConfirmModal（カバー画像・投稿確認モーダル）の確実な承認処理 ---
-      console.log('CoverConfirmModal内の「カバーなしで投稿する」ボタンをピンポイント検出中...');
+      console.log('モーダルのアニメーション完了を待機中...');
+      await page.waitForTimeout(1500);
 
-      // 最優先: 「カバーなしで投稿する」または「このまま投稿する」ボタン
-      const coverNavPromise = page.waitForNavigation({ timeout: 25000 }).catch(() => null);
       const coverBtn = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿"), .CoverConfirmModal button:has-text("このまま投稿"), .CoverConfirmModal button:has-text("設定せずに投稿")').first();
 
       if (await coverBtn.isVisible().catch(() => false)) {
         const coverTxt = await coverBtn.innerText().catch(() => '');
-        console.log(`【判定成功】確認モーダルボタン [${coverTxt}] をクリックして投稿を確定します！`);
-        await coverBtn.click({ force: true }).catch(async () => {
-          await coverBtn.evaluate(b => b.click());
-        });
+        console.log(`【判定成功】確認モーダルボタン [${coverTxt}] を検出しました。3重発火で投稿を確定します！`);
+        
+        // 1. スクロール＆フォーカス
+        await coverBtn.scrollIntoViewIfNeeded().catch(() => {});
+        await coverBtn.focus().catch(() => {});
+
+        // 2. Playwright直接クリック
+        await coverBtn.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(300);
+
+        // 3. JSレベルでのClick & MouseEventバブリング発火
+        await coverBtn.evaluate((b) => {
+          b.disabled = false;
+          b.click();
+          b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }).catch(() => {});
+        await page.waitForTimeout(300);
+
+        // 4. キーボード Enter 押下
+        await page.keyboard.press('Enter').catch(() => {});
         
         console.log('投稿完了画面への遷移を待機中...');
-        await coverNavPromise;
+        await page.waitForNavigation({ timeout: 25000 }).catch(() => {});
         await page.waitForTimeout(4000);
       } else {
-        // バックアップ: モーダル内の全ボタンを検索して最初に見つかった実行ボタンを1つだけクリック
+        console.log('「カバーなしで投稿する」ボタンが直接見つからないため、モーダル内全ボタンを検索します...');
         const modalBtns = page.locator('.CoverConfirmModal button');
         const count = await modalBtns.count().catch(() => 0);
         if (count > 0) {
@@ -604,10 +619,11 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
             const btn = modalBtns.nth(i);
             if (await btn.isVisible().catch(() => false)) {
               const txt = await btn.innerText().catch(() => '');
-              console.log(`モーダル内バックアップボタン検出: (${txt}) -> クリック`);
+              console.log(`モーダル内ボタン検出: (${txt}) -> クリック`);
               await btn.click({ force: true }).catch(() => {});
+              await btn.evaluate(b => b.click()).catch(() => {});
               await page.waitForTimeout(3000);
-              break; // 1つ押したら即抜け
+              break;
             }
           }
         }
