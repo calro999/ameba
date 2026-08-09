@@ -189,32 +189,32 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     console.log('Amebaログイン画面にアクセス中...');
     await page.goto('https://dauth.user.ameba.jp/login/ameba', { waitUntil: 'domcontentloaded' });
 
-    console.log('ログイン情報を入力中...');
-    const accountInput = page.locator('input[name="accountId"]');
-    await accountInput.waitFor({ state: 'visible', timeout: 10000 });
+    console.log(`アカウントID「${amebaId.slice(0, 3)}***」でログイン情報を入力中...`);
+    const accountInput = page.locator('input[name="accountId"], #accountId').first();
+    await accountInput.waitFor({ state: 'visible', timeout: 15000 });
     await accountInput.focus();
     await accountInput.pressSequentially(amebaId, { delay: 100 });
-    
-    const passwordInput = page.locator('input[name="password"]');
+
+    const passwordInput = page.locator('input[name="password"], #password').first();
     await passwordInput.focus();
     await passwordInput.pressSequentially(amebaPassword, { delay: 100 });
     await page.waitForTimeout(1000);
 
     console.log('ログインボタンを押下中...');
-    const submitBtn = page.locator('button[type="submit"], button.js-submit-button, button:has-text("ログイン")').first();
-    await submitBtn.focus().catch(() => {});
-    await submitBtn.click().catch(() => {});
+    const submitBtn = page.locator('button.js-submit-button, button[type="submit"]').first();
+    await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await submitBtn.click({ force: true });
     await page.keyboard.press('Enter').catch(() => {});
-    await page.waitForTimeout(4000);
-
-    if (page.url().includes('/signin') || page.url().includes('/login')) {
-      console.log('ログイン再試行中...');
-      await submitBtn.click({ force: true }).catch(() => {});
-      await page.keyboard.press('Enter').catch(() => {});
-      await page.waitForTimeout(4000);
-    }
+    await page.waitForTimeout(6000);
 
     console.log('ログイン後URL:', page.url());
+
+    if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
+      const pageErrors = await page.locator('[class*="error"], [class*="Error"], p, span').allInnerTexts().catch(() => []);
+      const errorMsg = pageErrors.filter(t => t && typeof t === 'string' && (t.includes('正しくあり') || t.includes('一致し') || t.includes('失敗') || t.includes('確認'))).join(' | ');
+      console.error('ログイン画面検出エラー:', errorMsg || '認証失敗（ID/パスワード不一致またはWAF制限）');
+      throw new Error(`Amebaログイン認証に失敗しました。詳細: ${errorMsg || 'ID・パスワードをご確認ください'}`);
+    }
 
     console.log('ブログエディタ画面へ移動中...');
     await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
@@ -223,7 +223,9 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     console.log('エディタ画面タイトル:', await page.title());
 
     if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-      throw new Error('Amebaログイン認証に失敗しました。アカウントIDまたはパスワードをご確認ください。');
+      const bodySnippet = await page.locator('body').innerText().catch(() => '');
+      console.error('ログイン画面ボディログ:', bodySnippet.slice(0, 500));
+      throw new Error('Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください。');
     }
 
     console.log('記事タイトルを入力中...');
