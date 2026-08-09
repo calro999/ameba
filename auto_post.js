@@ -62,14 +62,40 @@ function isMainProduct(item) {
   return true;
 }
 
-// 長すぎる型番や注意書き・【ブラケット】をきれいにクレンジングする関数
+// 長すぎる型番やSEOキーワード・注意書き・販売文句を徹底除去し、超綺麗な製品通称・ブランド名を抽出する関数
 function cleanProductName(name) {
-  return name
-    .replace(/【.*?】|\[.*?\]|（.*?）|\(.*?\)/g, '') // ブラケットや括弧内の文字を削除
-    .replace(/※.*/g, '') // ※以降の注意書きを削除
-    .replace(/送料無料|ポイント\d+倍|セール|在庫処分/gi, '')
-    .trim()
-    .slice(0, 30); // 読みやすいように30文字以内に整形
+  if (!name) return '';
+
+  // 1. 『』や「」で囲まれたブランド名・商品愛称があればそれを優先抽出
+  const quoteMatch = name.match(/『(.*?)』|「(.*?)」/);
+  if (quoteMatch) {
+    const quoted = (quoteMatch[1] || quoteMatch[2]).trim();
+    if (quoted.length >= 2 && !/送料無料|ポイント|予約|限定/.test(quoted)) {
+      return quoted;
+    }
+  }
+
+  let cleaned = name
+    // 【...】 [ ...] （...） (...) 内のノイズテキスト削除
+    .replace(/【(P\d+倍|実質|送料無料|ポイント|楽天|ランキング|あす楽|即納|セール|限定|最大|クーポン|100%|★).*?】/gi, '')
+    .replace(/【.*?】|\[.*?\]|（.*?）|\(.*?\)/g, '')
+    .replace(/※.*/g, '') // ※以降の注意書き削除
+    .replace(/送料無料|ポイント\d+倍|実質\d+円|セール|在庫処分|あす楽|即納|予約|限定|メーカー直送|代引不可|着脱式|破壁機|家庭用|卓上|電気|料理|調理|簡単|便利|多機能/gi, ' ')
+    .replace(/[\s\t\n]+/g, ' ')
+    .trim();
+
+  // 単語に分解して無駄な修飾語を除外し、ブランド名＋コア名詞（15〜22文字程度）に集約
+  const words = cleaned.split(' ').filter(w => w.length > 0);
+  if (words.length > 0) {
+    // 最初の2〜3単語を連結
+    let shortName = words.slice(0, 3).join(' ');
+    if (shortName.length > 25) {
+      shortName = words.slice(0, 2).join(' ');
+    }
+    return shortName.slice(0, 25).trim();
+  }
+
+  return name.slice(0, 20).trim();
 }
 
 // 2つの商品が同じメーカー・同一型番・同製品の別ショップ出品でないかチェックする判定関数
