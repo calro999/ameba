@@ -46,7 +46,6 @@ async function fetchRakutenItem(keyword) {
 
   if (!data || !data.Items || data.Items.length === 0) return null;
 
-  // ランダムに1件選択
   const randomIndex = Math.floor(Math.random() * data.Items.length);
   const item = data.Items[randomIndex].Item;
   return {
@@ -91,50 +90,61 @@ ${profileContent}
 }
 `;
 
-  // --- A. Gemini API 試行 ---
+  // --- A. Gemini API 試行（現行3.x系モデル） ---
   if (geminiApiKey) {
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    const models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash'];
     const genAI = new GoogleGenerativeAI(geminiApiKey);
 
     for (const modelName of models) {
       try {
+        console.log(`[Gemini API] モデル ${modelName} を試行中...`);
         const model = genAI.getGenerativeModel({ model: modelName });
         const response = await model.generateContent(prompt);
         const text = response.response.text().trim();
         const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
         const article = JSON.parse(cleanedJson);
-        console.log(`[AI生成] Gemini (${modelName}) で記事生成に成功しました。`);
+        console.log(`[AI生成] Gemini (${modelName}) で記事生成に成功！`);
         return article;
       } catch (err) {
         console.log(`[Gemini API (${modelName}) エラー]: ${err.message}`);
       }
     }
+    console.log('[Gemini API] 全モデルで失敗しました。');
   } else {
-    console.log('[Gemini API] GEMINI_API_KEY が設定されていません。');
+    console.log('[Gemini API] GEMINI_API_KEY が設定されていないため、スキップします。');
   }
 
-  // --- B. Groq API 試行 ---
+  // --- B. Groq API 試行（複数モデルフォールバック） ---
   if (groqApiKey) {
-    console.log('[AI生成] Gemini不可のため Groq API（llama-3.3-70b-versatile）を試行します...');
-    try {
-      const groq = new Groq({ apiKey: groqApiKey });
-      const chatCompletion = await groq.chat.completions.create({
-        messages: [
-          { role: 'system', content: 'あなたはAmebaブログの人気ブロガーです。必ず要求されたJSON形式のみで回答してください。' },
-          { role: 'user', content: prompt }
-        ],
-        model: 'llama-3.3-70b-versatile',
-        response_format: { type: 'json_object' }
-      });
-      const text = chatCompletion.choices[0]?.message?.content || '';
-      const article = JSON.parse(text);
-      console.log(`[AI生成] Groq (llama-3.3-70b-versatile) で記事生成に成功しました！`);
-      return article;
-    } catch (err) {
-      console.log(`[Groq API エラー]: ${err.message}`);
+    const groqModels = [
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
+      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (instant)' },
+      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B' }
+    ];
+    const groq = new Groq({ apiKey: groqApiKey });
+
+    for (const m of groqModels) {
+      try {
+        console.log(`[Groq API] モデル ${m.name} (${m.id}) を試行中...`);
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: 'あなたはAmebaブログの人気ブロガーです。必ず要求されたJSON形式のみで回答してください。' },
+            { role: 'user', content: prompt }
+          ],
+          model: m.id,
+          response_format: { type: 'json_object' }
+        });
+        const text = chatCompletion.choices[0]?.message?.content || '';
+        const article = JSON.parse(text);
+        console.log(`[AI生成] Groq (${m.name}) で記事生成に成功！`);
+        return article;
+      } catch (err) {
+        console.log(`[Groq API (${m.name}) エラー]: ${err.message}`);
+      }
     }
+    console.log('[Groq API] 全モデルで失敗しました。');
   } else {
-    console.log('[Groq API] GROQ_API_KEY が設定されていません。');
+    console.log('[Groq API] GROQ_API_KEY が設定されていないため、スキップします。');
   }
 
   // --- C. フォールバック記事生成 ---
@@ -187,6 +197,153 @@ ${profileContent}
   };
 }
 
+// エディタ本文にHTMLを注入する関数（複数方式を順番に試行）
+async function injectEditorContent(page, fullHtml) {
+  // --- 方式1: HTML表示モードのtextarea ---
+  console.log('[エディタ] 方式1: HTML表示モード（textarea）を試行中...');
+  const sourceBtn = page.locator('button#js-editorModeButton--source, button:has-text("HTML表示"), button:has-text("HTML編集"), [data-testid="source-mode-button"]').first();
+  const sourceBtnVisible = await sourceBtn.isVisible().catch(() => false);
+  if (sourceBtnVisible) {
+    await sourceBtn.click();
+    await page.waitForTimeout(2000);
+    console.log('[エディタ] HTML表示ボタンをクリックしました。');
+  }
+
+  const textareaSelectors = [
+    'textarea#amebloeditor',
+    'textarea[name="entry_text"]',
+    '#entryText',
+    'textarea.cke_source',
+    'textarea[class*="source"]',
+    '.amebloeditor-source textarea'
+  ];
+  for (const sel of textareaSelectors) {
+    const textarea = page.locator(sel).first();
+    const visible = await textarea.isVisible().catch(() => false);
+    if (visible) {
+      console.log(`[エディタ] textarea検出: ${sel}`);
+      await textarea.click();
+      await textarea.fill(fullHtml);
+      await page.waitForTimeout(500);
+      const val = await textarea.inputValue().catch(() => '');
+      if (val.length > 10) {
+        console.log(`[エディタ] 方式1成功: textarea(${sel})に ${val.length} 文字入力完了`);
+        return true;
+      }
+    }
+  }
+
+  // --- 方式2: iframe内のcontenteditable (CKEditor等) ---
+  console.log('[エディタ] 方式2: iframe + contenteditable を試行中...');
+
+  // 通常モードに戻す
+  if (sourceBtnVisible) {
+    const normalBtn = page.locator('button:has-text("通常表示"), button:has-text("通常編集"), button#js-editorModeButton--normal').first();
+    if (await normalBtn.isVisible().catch(() => false)) {
+      await normalBtn.click();
+      await page.waitForTimeout(2000);
+    }
+  }
+
+  const iframeSelectors = [
+    'iframe.cke_wysiwyg_frame',
+    'iframe#amebloeditor',
+    '#cke_1_contents iframe',
+    '.cke_contents iframe',
+    'iframe[class*="editor"]',
+    'iframe[title*="editor"]',
+    'iframe[title*="エディタ"]'
+  ];
+
+  for (const iframeSel of iframeSelectors) {
+    try {
+      const iframeEl = page.locator(iframeSel).first();
+      if (await iframeEl.isVisible().catch(() => false)) {
+        console.log(`[エディタ] iframe検出: ${iframeSel}`);
+        const frame = page.frameLocator(iframeSel).first();
+        const body = frame.locator('body[contenteditable="true"], body.cke_editable, body');
+        if (await body.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+          await body.first().evaluate((el, html) => {
+            el.innerHTML = html;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }, fullHtml);
+          await page.waitForTimeout(500);
+          const len = await body.first().evaluate(el => el.innerHTML.length).catch(() => 0);
+          if (len > 10) {
+            console.log(`[エディタ] 方式2成功: iframe contenteditable に ${len} 文字入力完了`);
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[エディタ] iframe(${iframeSel})へのアクセス失敗: ${e.message}`);
+    }
+  }
+
+  // --- 方式3: 直接 contenteditable の div ---
+  console.log('[エディタ] 方式3: contenteditable div を試行中...');
+  const ceSelectors = [
+    'div[contenteditable="true"].cke_editable',
+    'div[contenteditable="true"][role="textbox"]',
+    'div.ql-editor',
+    '[data-testid="entry-body-editor"]',
+    'div[contenteditable="true"]'
+  ];
+  for (const ceSel of ceSelectors) {
+    const ce = page.locator(ceSel).first();
+    if (await ce.isVisible().catch(() => false)) {
+      console.log(`[エディタ] contenteditable div検出: ${ceSel}`);
+      await ce.evaluate((el, html) => {
+        el.innerHTML = html;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, fullHtml);
+      await page.waitForTimeout(500);
+      const len = await ce.evaluate(el => el.innerHTML.length).catch(() => 0);
+      if (len > 10) {
+        console.log(`[エディタ] 方式3成功: contenteditable div に ${len} 文字入力完了`);
+        return true;
+      }
+    }
+  }
+
+  // --- 方式4: 最終手段 - CKEditorインスタンス + hidden要素へのJS注入 ---
+  console.log('[エディタ] 方式4: 最終手段 - 全entry_text要素へのJS注入...');
+  const injected = await page.evaluate((html) => {
+    let success = false;
+    const targets = document.querySelectorAll('textarea[name="entry_text"], input[name="entry_text"], #entryText, #entry_text');
+    targets.forEach(el => {
+      el.value = html;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      success = true;
+    });
+    if (typeof CKEDITOR !== 'undefined') {
+      for (const name in CKEDITOR.instances) {
+        CKEDITOR.instances[name].setData(html);
+        success = true;
+      }
+    }
+    return success;
+  }, fullHtml).catch(() => false);
+
+  if (injected) {
+    console.log('[エディタ] 方式4成功: JS直接注入で本文を設定しました。');
+    return true;
+  }
+
+  // デバッグ: エディタDOM構造をダンプ
+  console.error('[エディタ] 全方式失敗。エディタDOM構造をダンプします...');
+  const debugInfo = await page.evaluate(() => {
+    const iframes = [...document.querySelectorAll('iframe')].map(f => ({ tag: 'iframe', id: f.id, class: f.className, src: f.src, title: f.title }));
+    const textareas = [...document.querySelectorAll('textarea')].map(t => ({ tag: 'textarea', id: t.id, name: t.name, class: t.className, visible: t.offsetParent !== null }));
+    const editables = [...document.querySelectorAll('[contenteditable]')].map(e => ({ tag: e.tagName, id: e.id, class: e.className, role: e.getAttribute('role') }));
+    return { iframes, textareas, editables };
+  }).catch(() => ({}));
+  console.error('[エディタ] DOM構造:', JSON.stringify(debugInfo, null, 2));
+  return false;
+}
+
 // 3. PlaywrightによるAmeba自動投稿処理
 async function postToAmeba(title, contentHtml, tags, itemInfo) {
   const amebaId = process.env.AMEBA_ID;
@@ -207,7 +364,6 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
 
   const context = await browser.newContext(contextOptions);
 
-  // CookieがSecretに登録されている場合はセット
   if (amebaCookieJson) {
     try {
       const cookies = JSON.parse(amebaCookieJson);
@@ -223,7 +379,7 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
   try {
     console.log('ブログエディタ画面へアクセス中...');
     await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     // ログイン画面にリダイレクトされたか判定
     if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin') || page.url().includes('/login')) {
@@ -273,32 +429,24 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       }
 
       if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
-        const pageErrors = await page.locator('[class*="error"], [class*="Error"], .c-errorMessage, #error-msg, p').allInnerTexts().catch(() => []);
-        const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && !t.includes('お困りの方') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('入力してください') || t.includes('失敗')));
-        const errorMsg = realErrors.join(' | ');
-        console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（パスワード不一致またはGoogleログイン専用アカウントの可能性があります）');
-        throw new Error(`Amebaログイン認証に失敗しました。Googleログイン専用アカウントの場合はCookie（AMEBA_COOKIES）をSecretに設定してください。`);
+        throw new Error('Amebaログイン認証に失敗しました。Googleログイン専用アカウントの場合はCookie（AMEBA_COOKIES）をSecretに設定してください。');
       }
 
-      // ログイン成功したら再度エディタ画面へ
       await page.goto('https://blog.ameba.jp/ucs/entry/srventryinsertinput.do', { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(5000);
     }
 
     console.log('エディタ画面URL:', page.url());
     console.log('エディタ画面タイトル:', await page.title());
 
+    // --- タイトル入力 ---
     console.log('記事タイトルを入力中...');
     const titleInput = page.locator('input[name="entry_title"], #entryTitle, textarea[data-testid="entry-title-input"]').first();
     await titleInput.waitFor({ state: 'visible', timeout: 30000 });
     await titleInput.fill(title);
+    console.log(`タイトル「${title}」を入力しました。`);
 
-    const metaTitleInput = page.locator('input[name="meta_title"]');
-    if (await metaTitleInput.isVisible().catch(() => false)) {
-      await metaTitleInput.fill(title).catch(() => {});
-    }
-
-    // 楽天アフィリエイトカード（画像＋リンク）の生成
+    // --- 楽天アフィリエイトカード生成 ---
     const rakutenHtml = `
       <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
         ${itemInfo.imageUrl ? `<a href="${itemInfo.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${itemInfo.imageUrl}" alt="${title}" style="max-width: 120px; height: auto; border-radius: 4px;" /></a>` : ''}
@@ -309,24 +457,16 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
         </div>
       </div>
     `;
-
     const fullHtml = contentHtml + rakutenHtml;
 
-    console.log('HTML表示モードに切り替え中...');
-    const sourceBtn = page.locator('button#js-editorModeButton--source, button:has-text("HTML表示")').first();
-    if (await sourceBtn.isVisible().catch(() => false)) {
-      await sourceBtn.click();
-      await page.waitForTimeout(1000);
+    // --- 本文HTML入力（複数方式試行） ---
+    console.log('本文HTMLを入力中...');
+    const editorSuccess = await injectEditorContent(page, fullHtml);
+    if (!editorSuccess) {
+      throw new Error('エディタへの本文入力に全方式で失敗しました。Amebaのエディタ仕様が変更された可能性があります。');
     }
 
-    console.log('本文HTMLを入力中...');
-    const editor = page.locator('textarea#amebloeditor, textarea[name="entry_text"], #entryText').first();
-    await editor.evaluate((el, html) => {
-      el.value = html;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, fullHtml);
-
+    // --- ハッシュタグ入力 ---
     console.log('ハッシュタグ入力中...');
     for (const tag of tags) {
       const tagInput = page.locator('input[placeholder*="ハッシュタグ"], input[data-testid="hashtag-input"], #js-hashtag-button').first();
@@ -337,30 +477,26 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       }
     }
 
-    console.log('モーダルダイアログをクローズ中...');
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
-    // 【安全対策】投稿ボタン押下直前に 1分〜5分（60〜300秒）のランダム待機を挿入
+    // --- 安全対策: 投稿ボタン押下前に1〜5分の待機 ---
     if (process.env.SKIP_DELAY === 'true') {
       console.log('SKIP_DELAY が有効なため、投稿前待機をスキップします。');
     } else {
-      const delaySec = Math.floor(Math.random() * 240) + 60; // 60秒(1分)〜300秒(5分)
-      console.log(`安全運用対策: BAN・bot検知防止のため、投稿ボタン押下前に ${delaySec} 秒間（約${Math.round(delaySec/60)}分）ランダム待機します...`);
+      const delaySec = Math.floor(Math.random() * 240) + 60;
+      console.log(`安全運用対策: 投稿ボタン押下前に ${delaySec} 秒間（約${Math.round(delaySec/60)}分）ランダム待機します...`);
       await sleep(delaySec * 1000);
     }
 
+    // --- 投稿ボタン押下 ---
     console.log('「投稿する」ボタンを押下中...');
     const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), [data-testid="entry-submit-button"]').first();
     await postBtn.waitFor({ state: 'visible', timeout: 15000 });
-    
-    // スクロールして画面に確実に表示させてからクリック
     await postBtn.scrollIntoViewIfNeeded().catch(() => {});
     await page.waitForTimeout(500);
 
-    // 投稿完了画面への遷移（`entryend.do` や URLの変化）を監視
     const navigationPromise = page.waitForNavigation({ timeout: 30000 }).catch(() => null);
-    
     await postBtn.click({ force: true }).catch(async () => {
       await postBtn.evaluate(el => el.click());
     });
@@ -374,12 +510,13 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     if (endUrl.includes('entryend') || endUrl.includes('complete') || !endUrl.includes('srventryinsertinput.do')) {
       console.log('【投稿成功】記事の投稿完了画面への遷移を確認しました！');
     } else {
-      // エラーメッセージ等の検出
       const errorMsg = await page.locator('.c-errorMessage, [class*="error"], .error-message').allInnerTexts().catch(() => []);
-      if (errorMsg.length > 0) {
-        console.error('【投稿失敗検出】画面エラーメッセージ:', errorMsg.join(' | '));
+      const filtered = errorMsg.filter(t => t.trim().length > 0 && !t.includes('詳しく見る') && !t.includes('戻る'));
+      if (filtered.length > 0) {
+        console.error('【投稿失敗】画面エラー:', filtered.join(' | '));
+        throw new Error(`投稿失敗: ${filtered.join(' | ')}`);
       } else {
-        console.warn('【注意】投稿画面からの遷移が検出されませんでした。保存状態をご確認ください。');
+        console.warn('【注意】投稿画面から遷移しませんでした。投稿状態を確認してください。');
       }
     }
 
