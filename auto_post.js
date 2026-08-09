@@ -491,6 +491,16 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       }
     }
 
+    // ハッシュタグモーダルの「決定」ボタンがあれば確実にクリックして閉じる
+    const tagConfirmBtn = page.locator('#js-hashtag-fixButton, .p-hashtag__modal__submit, button:has-text("決定")').first();
+    if (await tagConfirmBtn.isVisible().catch(() => false)) {
+      console.log('ハッシュタグモーダルの「決定」ボタンをクリックしてモーダルを閉じます...');
+      await tagConfirmBtn.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1000);
+    }
+
+    // 残存しているモーダルやオーバーレイをEscapeでクリア
+    await page.keyboard.press('Escape').catch(() => {});
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
