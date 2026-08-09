@@ -121,21 +121,22 @@ ${profileContent}
 - 商品名: ${itemPair.itemB.itemName}
 - 価格: ${itemPair.itemB.price}円
 
-【執筆ルール】:
-1. 文章構成と読みやすさ（改行重視）:
-   - スマホ読者を意識し、**句点（。）のあとや会話の切れ目には必ず <br><br> を入れ、行間・改行をしっかり空けて読みやすく**してください。
+【執筆ルール・絶対厳守事項】:
+1. **注意：文章中に「（ここにアフィリエイトリンク）」「【リンク】」などのプレースホルダー文言は絶対に一切書かないでください。純粋なレビュー本文のみを記述してください。**
+2. 文章構成と読みやすさ（改行重視）:
+   - スマホ読者を意識し、**句点（。）のあとや会話の切れ目には必ず <br><br> を入れ、行間・改行をしっかり空けて非常に読みやすく**してください。
    - ① 導入（「〜と〜、結局どっちを選ぶべき？」というリアルな悩みや比較視点）
-   - ② 商品Aの特徴とメリット・向いている人
-   - ③ 商品Bの特徴とメリット・向いている人
-   - ④ 徹底比較まとめ（使い勝手、お手入れ、コスパ等の視点別比較）
+   - ② 「<h2>💡 ${itemPair.itemA.itemName.slice(0, 15)}... の特徴と魅力</h2>」という見出しで商品Aを詳しく解説
+   - ③ 「<h2>💡 ${itemPair.itemB.itemName.slice(0, 15)}... の特徴と魅力</h2>」という見出しで商品Bを詳しく解説
+   - ④ 「<h2>⚖️ どちらを選ぶべき？比較まとめ</h2>」（使い勝手、お手入れ、コスパ等の視点別比較）
    - ⑤ 結論（「一人飲み・手軽さ重視ならA、大人数・本格重視ならB！」など明快な提案）
-2. 口調: 気取らない・ちょっと大人・居酒屋っぽい、「〜なんですよね」「〜かなと思います」の自然な会話調。
-3. タイトル: 「〜と〜どっちが正解？」「【比較】家で使うなら〜と〜どちらが買い？」等の惹きつける35文字以内のタイトル。
+3. 口調: 気取らない・ちょっと大人・居酒屋っぽい、「〜なんですよね」「〜かなと思います」の自然な会話調。
+4. タイトル: 「〜と〜どっちが正解？」「【比較】家で使うなら〜と〜どちらが買い？」等の惹きつける35文字以内のタイトル。
 
 以下のJSON形式のみで出力してください（Markdownコードブロック表記不可）：
 {
   "title": "記事タイトル",
-  "contentHtml": "<p>導入文...</p><br><br><h2>💡 比較ポイント...</h2>...",
+  "contentHtml": "<p>導入文...</p><br><br><h2>💡 商品Aの特徴...</h2><p>解説...</p><br><br><h2>💡 商品Bの特徴...</h2><p>解説...</p>",
   "tags": ["家電比較", "おうち居酒屋", "晩酌グッズ", "楽天おすすめ"]
 }
 `;
@@ -201,19 +202,16 @@ ${profileContent}
 <p>家で美味しいおつまみを楽しみながら飲む時間って最高ですよね。<br><br>でも、「どの卓上アイテムを選べば後悔しないんだろう……」と悩むことってありませんか？</p>
 
 <br><br>
-<p>今回は人気の2モデル「<strong>${itemPair.itemA.itemName}</strong>」と「<strong>${itemPair.itemB.itemName}</strong>」の違いや選び方を分かりやすく整理してみました！</p>
+<h2>💡 ${nameA} の特徴と魅力</h2>
+<p>サクッと準備して一人飲みを楽しみたいなら、コンパクトで扱いやすいタイプが重宝します。<br><br>手軽さと使い勝手のバランスが非常に優れていますよ。</p>
 
 <br><br>
-<h2>💡 比較ポイント1：サイズと使い勝手</h2>
-<p>サクッと準備して一人飲みを楽しみたいなら、コンパクトで扱いやすいタイプが重宝します。<br><br>逆に家族や友人とおうち宴会を楽しみたいなら、一度に調理できる容量や火力が重要になりますね。</p>
+<h2>💡 ${nameB} の特徴と魅力</h2>
+<p>家族や友人とおうち宴会を楽しみたいなら、一度に調理できる容量や火力が重要になります。<br><br>しっかり調理したい方にはピッタリの仕様ですね。</p>
 
 <br><br>
-<h2>🧼 比較ポイント2：お手入れのしやすさ</h2>
-<p>使用後の油汚れや掃除がラクかどうかも大事なポイント。<br><br>フッ素加工やパーツの取り外しができるタイプを選ぶと、後片付けのストレスがグッと減りますよ。</p>
-
-<br><br>
-<h2>🍶 まとめ：あなたにピッタリなのはどっち？</h2>
-<p>手軽さとコスパを最優先するなら商品A、機能性や容量にこだわるなら商品Bが間違いなさそうです。<br><br>現在のセール価格や獲得できる還元ポイントは以下からチェックできますので、気になった方はぜひ覗いてみてくださいね！</p>
+<h2>⚖️ どちらを選ぶべき？比較まとめ</h2>
+<p>手軽さとコスパを最優先するなら商品A、機能性や容量にこだわるなら商品Bが間違いなさそうです。<br><br>現在のセール価格や獲得できる還元ポイントは商品詳細からチェックできますので、気になった方はぜひ覗いてみてくださいね！</p>
 `;
 
   return {
@@ -252,11 +250,48 @@ async function injectEditorContent(page, fullHtml) {
   return false;
 }
 
+// アフィリエイトカードHTMLの生成
+function createRakutenCardHtml(item, label) {
+  return `
+    <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
+      ${item.imageUrl ? `<a href="${item.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${item.imageUrl}" alt="${item.itemName}" style="max-width: 130px; height: auto; border-radius: 6px; border: 1px solid #ddd;" /></a>` : ''}
+      <div>
+        <span style="background-color: #bf0000; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${label}</span>
+        <h4 style="margin: 8px 0 8px 0; font-size: 15px; line-height: 1.4;"><a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="color: #333; text-decoration: none;">${item.itemName}</a></h4>
+        <p style="margin: 0 0 8px 0; color: #bf0000; font-weight: bold; font-size: 15px;">価格: ${item.price.toLocaleString()}円 (税込)</p>
+        <a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #bf0000; color: #fff; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;">楽天市場で商品詳細を見る ➔</a>
+      </div>
+    </div>
+  `;
+}
+
 // 3. PlaywrightによるAmeba自動投稿処理
-async function postToAmeba(title, contentHtml, tags, itemPair) {
+async function postToAmeba(title, rawContentHtml, tags, itemPair) {
   const amebaId = process.env.AMEBA_ID;
   const amebaPassword = process.env.AMEBA_PASSWORD;
   const amebaCookieJson = process.env.AMEBA_COOKIES;
+
+  // 「ここにアフィリエイトリンク」などのプレースホルダー文字列を強制置換・排除
+  let cleanContent = rawContentHtml.replace(/（ここに.*?リンク.*?）|【ここに.*?リンク.*?】|ここにアフィリエイトリンク/g, '');
+
+  // 商品A・商品Bのアフィリエイトカードを見出し下（または指定箇所）に精密挿入
+  const cardA = createRakutenCardHtml(itemPair.itemA, '比較商品A');
+  const cardB = createRakutenCardHtml(itemPair.itemB, '比較商品B');
+
+  // h2タグが複数ある場合、最初のh2の後にcardA、2番目のh2の後にcardBを挟み込む
+  const h2Regex = /<\/h2>/gi;
+  let matchesCount = 0;
+  let fullHtml = cleanContent.replace(h2Regex, (match) => {
+    matchesCount++;
+    if (matchesCount === 1) return `${match}\n${cardA}`;
+    if (matchesCount === 2) return `${match}\n${cardB}`;
+    return match;
+  });
+
+  // 万が一h2タグが無かった場合は末尾に両方配置
+  if (matchesCount < 2) {
+    fullHtml = cleanContent + cardA + cardB;
+  }
 
   const browser = await chromium.launch({
     headless: true,
@@ -310,37 +345,32 @@ async function postToAmeba(title, contentHtml, tags, itemPair) {
     await titleInput.waitFor({ state: 'visible', timeout: 30000 });
     await titleInput.fill(title);
 
-    // 2商品分のアフィリエイトカードを連結生成
-    const rakutenCard = (item, label) => `
-      <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 20px 0; background-color: #fafafa; display: flex; align-items: center; gap: 16px;">
-        ${item.imageUrl ? `<a href="${item.itemUrl}" target="_blank" rel="nofollow noopener"><img src="${item.imageUrl}" alt="${item.itemName}" style="max-width: 120px; height: auto; border-radius: 4px;" /></a>` : ''}
-        <div>
-          <span style="background-color: #bf0000; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${label}</span>
-          <h4 style="margin: 8px 0 8px 0; font-size: 15px;"><a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="color: #333; text-decoration: none;">${item.itemName}</a></h4>
-          <p style="margin: 0 0 8px 0; color: #bf0000; font-weight: bold;">価格: ${item.price.toLocaleString()}円 (税込)</p>
-          <a href="${item.itemUrl}" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #bf0000; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;">楽天市場で詳細を見る</a>
-        </div>
-      </div>
-    `;
-
-    const fullHtml = contentHtml + rakutenCard(itemPair.itemA, '比較商品A') + rakutenCard(itemPair.itemB, '比較商品B');
-
     console.log('本文HTMLを入力中...');
     const editorSuccess = await injectEditorContent(page, fullHtml);
     if (!editorSuccess) {
       throw new Error('エディタへの本文入力に失敗しました。');
     }
 
-    console.log('ハッシュタグを設定中...');
+    console.log('ハッシュタグおよびカバー画像URLを設定中...');
     const formattedTags = tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
-    await page.evaluate((tagStr) => {
+    
+    // ハッシュタグ設定 ＆ カバー画像URL（image_url）に商品Aの画像URLを設定してモーダルをスキップさせる
+    await page.evaluate(({ tagStr, coverUrl }) => {
       const tagInput = document.querySelector('input[name="hashtag"], #js-hashtag-input');
       if (tagInput) {
         tagInput.value = tagStr;
         tagInput.dispatchEvent(new Event('input', { bubbles: true }));
         tagInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, formattedTags).catch(() => {});
+      let imgInput = document.querySelector('input[name="image_url"]');
+      if (!imgInput) {
+        imgInput = document.createElement('input');
+        imgInput.type = 'hidden';
+        imgInput.name = 'image_url';
+        document.forms[0]?.appendChild(imgInput);
+      }
+      imgInput.value = coverUrl;
+    }, { tagStr: formattedTags, coverUrl: itemPair.itemA.imageUrl }).catch(() => {});
 
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
