@@ -8,7 +8,7 @@
     "start": "node auto_post.js"
   },
   "dependencies": {
-    "@google/genai": "^0.1.1",
+    "@google/generative-ai": "^0.21.0",
     "dotenv": "^16.4.5",
     "playwright": "^1.45.0"
   }
