@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import { chromium } from 'playwright';
 import 'dotenv/config';
 import fs from 'fs';
@@ -56,13 +57,13 @@ async function fetchRakutenItem(keyword) {
   };
 }
 
-// 2. Gemini APIで記事本文・タイトル・ハッシュタグを生成（profileに完全連動）
+// 2. AIで記事本文・タイトル・ハッシュタグを生成（Gemini -> Groq -> フォールバック）
 async function generateArticle(itemInfo) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY;
   const profileContent = getProfileData();
 
-  if (apiKey) {
-    const prompt = `
+  const prompt = `
 以下の【プロフィール設定】と【商品情報】を基に、Amebaブログ用のオリジナル記事を作成してください。
 
 【プロフィール設定】:
@@ -90,36 +91,55 @@ ${profileContent}
 }
 `;
 
-    // サポートされているGeminiモデル
+  // --- A. Gemini API 試行 ---
+  if (geminiApiKey) {
     const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
 
     for (const modelName of models) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName });
-          const response = await model.generateContent(prompt);
-          const text = response.response.text().trim();
-          const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-          const article = JSON.parse(cleanedJson);
-          console.log(`[Gemini API] モデル(${modelName})で記事生成に成功しました。`);
-          return article;
-        } catch (err) {
-          console.log(`[Gemini API (${modelName}) 試行 ${attempt}] エラー: ${err.message}`);
-          if (err.message.includes('429') || err.message.includes('Quota exceeded')) {
-            console.log('レート制限が検出されました。3秒待機してリトライします...');
-            await sleep(3000);
-          } else {
-            break;
-          }
-        }
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const response = await model.generateContent(prompt);
+        const text = response.response.text().trim();
+        const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        const article = JSON.parse(cleanedJson);
+        console.log(`[AI生成] Gemini (${modelName}) で記事生成に成功しました。`);
+        return article;
+      } catch (err) {
+        console.log(`[Gemini API (${modelName}) エラー]: ${err.message}`);
       }
     }
+  } else {
+    console.log('[Gemini API] GEMINI_API_KEY が設定されていません。');
   }
 
-  console.log('Gemini APIが利用できないため、profile設定に基づいたオリジナル記事生成にフォールバックします。');
+  // --- B. Groq API 試行 ---
+  if (groqApiKey) {
+    console.log('[AI生成] Gemini不可のため Groq API（llama-3.3-70b-versatile）を試行します...');
+    try {
+      const groq = new Groq({ apiKey: groqApiKey });
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: 'system', content: 'あなたはAmebaブログの人気ブロガーです。必ず要求されたJSON形式のみで回答してください。' },
+          { role: 'user', content: prompt }
+        ],
+        model: 'llama-3.3-70b-versatile',
+        response_format: { type: 'json_object' }
+      });
+      const text = chatCompletion.choices[0]?.message?.content || '';
+      const article = JSON.parse(text);
+      console.log(`[AI生成] Groq (llama-3.3-70b-versatile) で記事生成に成功しました！`);
+      return article;
+    } catch (err) {
+      console.log(`[Groq API エラー]: ${err.message}`);
+    }
+  } else {
+    console.log('[Groq API] GROQ_API_KEY が設定されていません。');
+  }
+
+  // --- C. フォールバック記事生成 ---
+  console.log('すべてのAI APIが利用できないため、profile設定に基づいたオリジナル記事生成にフォールバックします。');
   
-  // profileに合わせた動的・独自のフォールバック記事生成
   const nameSnippet = itemInfo.itemName.replace(/【.*?】|\[.*?\]/g, '').trim().slice(0, 24);
   const titles = [
     `【本音比較】${nameSnippet}って実際どう？一人飲みに使える？`,
@@ -332,13 +352,36 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
 
     console.log('「投稿する」ボタンを押下中...');
     const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), [data-testid="entry-submit-button"]').first();
-    await postBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await postBtn.waitFor({ state: 'visible', timeout: 15000 });
+    
+    // スクロールして画面に確実に表示させてからクリック
+    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(500);
+
+    // 投稿完了画面への遷移（`entryend.do` や URLの変化）を監視
+    const navigationPromise = page.waitForNavigation({ timeout: 30000 }).catch(() => null);
+    
     await postBtn.click({ force: true }).catch(async () => {
       await postBtn.evaluate(el => el.click());
     });
 
-    await page.waitForTimeout(5000);
-    console.log('投稿完了！');
+    await navigationPromise;
+    await page.waitForTimeout(3000);
+
+    const endUrl = page.url();
+    console.log('投稿押下後の最終URL:', endUrl);
+
+    if (endUrl.includes('entryend') || endUrl.includes('complete') || !endUrl.includes('srventryinsertinput.do')) {
+      console.log('【投稿成功】記事の投稿完了画面への遷移を確認しました！');
+    } else {
+      // エラーメッセージ等の検出
+      const errorMsg = await page.locator('.c-errorMessage, [class*="error"], .error-message').allInnerTexts().catch(() => []);
+      if (errorMsg.length > 0) {
+        console.error('【投稿失敗検出】画面エラーメッセージ:', errorMsg.join(' | '));
+      } else {
+        console.warn('【注意】投稿画面からの遷移が検出されませんでした。保存状態をご確認ください。');
+      }
+    }
 
   } catch (error) {
     console.error('投稿処理エラー:', error);
