@@ -197,10 +197,40 @@ ${profileContent}
   };
 }
 
-// エディタ本文にHTMLを注入する関数（複数方式を順番に試行）
+// エディタ本文にHTMLを注入する関数
+// CKEditorの内部データモデルに直接setData()することが最重要。
+// iframe.body.innerHTMLを変更してもCKEditorは認識しない（フォーム送信時に空になる）。
 async function injectEditorContent(page, fullHtml) {
-  // --- 方式1: HTML表示モードのtextarea ---
-  console.log('[エディタ] 方式1: HTML表示モード（textarea）を試行中...');
+
+  // --- 方式1（最優先）: CKEditorインスタンスに直接setData() ---
+  console.log('[エディタ] 方式1: CKEditor.setData() を試行中...');
+  const ckeResult = await page.evaluate((html) => {
+    if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
+      const names = Object.keys(CKEDITOR.instances);
+      if (names.length > 0) {
+        for (const name of names) {
+          const inst = CKEDITOR.instances[name];
+          inst.setData(html);
+          // フォームのhidden textareaにも同期
+          if (typeof inst.updateElement === 'function') {
+            inst.updateElement();
+          }
+        }
+        return { success: true, instances: names };
+      }
+    }
+    return { success: false, instances: [] };
+  }, fullHtml).catch(() => ({ success: false, instances: [] }));
+
+  if (ckeResult.success) {
+    console.log(`[エディタ] 方式1成功: CKEditor.setData() でインスタンス [${ckeResult.instances.join(', ')}] にデータ注入完了`);
+    await page.waitForTimeout(1000);
+    return true;
+  }
+  console.log('[エディタ] CKEditorインスタンスが見つかりません。他の方式を試行します。');
+
+  // --- 方式2: HTML表示モード（ソースモード）のtextarea ---
+  console.log('[エディタ] 方式2: HTML表示モード（textarea）を試行中...');
   const sourceBtn = page.locator('button#js-editorModeButton--source, button:has-text("HTML表示"), button:has-text("HTML編集"), [data-testid="source-mode-button"]').first();
   const sourceBtnVisible = await sourceBtn.isVisible().catch(() => false);
   if (sourceBtnVisible) {
@@ -210,12 +240,11 @@ async function injectEditorContent(page, fullHtml) {
   }
 
   const textareaSelectors = [
+    'textarea.cke_source',
     'textarea#amebloeditor',
     'textarea[name="entry_text"]',
     '#entryText',
-    'textarea.cke_source',
-    'textarea[class*="source"]',
-    '.amebloeditor-source textarea'
+    'textarea[class*="source"]'
   ];
   for (const sel of textareaSelectors) {
     const textarea = page.locator(sel).first();
@@ -227,14 +256,11 @@ async function injectEditorContent(page, fullHtml) {
       await page.waitForTimeout(500);
       const val = await textarea.inputValue().catch(() => '');
       if (val.length > 10) {
-        console.log(`[エディタ] 方式1成功: textarea(${sel})に ${val.length} 文字入力完了`);
+        console.log(`[エディタ] 方式2成功: textarea(${sel})に ${val.length} 文字入力完了`);
         return true;
       }
     }
   }
-
-  // --- 方式2: iframe内のcontenteditable (CKEditor等) ---
-  console.log('[エディタ] 方式2: iframe + contenteditable を試行中...');
 
   // 通常モードに戻す
   if (sourceBtnVisible) {
@@ -245,14 +271,13 @@ async function injectEditorContent(page, fullHtml) {
     }
   }
 
+  // --- 方式3: iframe内contenteditable + CKEditor同期 ---
+  console.log('[エディタ] 方式3: iframe + contenteditable + CKEditor同期 を試行中...');
   const iframeSelectors = [
     'iframe.cke_wysiwyg_frame',
-    'iframe#amebloeditor',
     '#cke_1_contents iframe',
     '.cke_contents iframe',
-    'iframe[class*="editor"]',
-    'iframe[title*="editor"]',
-    'iframe[title*="エディタ"]'
+    'iframe[class*="editor"]'
   ];
 
   for (const iframeSel of iframeSelectors) {
@@ -265,13 +290,33 @@ async function injectEditorContent(page, fullHtml) {
         if (await body.first().isVisible({ timeout: 5000 }).catch(() => false)) {
           await body.first().evaluate((el, html) => {
             el.innerHTML = html;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
           }, fullHtml);
           await page.waitForTimeout(500);
+
+          // iframeにHTML注入した後、CKEditorの内部データモデルも同期
+          const synced = await page.evaluate((html) => {
+            if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
+              for (const name in CKEDITOR.instances) {
+                CKEDITOR.instances[name].setData(html);
+                if (typeof CKEDITOR.instances[name].updateElement === 'function') {
+                  CKEDITOR.instances[name].updateElement();
+                }
+              }
+              return true;
+            }
+            // CKEditorが無い場合、隠しtextareaに直接書き込む
+            const ta = document.querySelector('textarea[name="entry_text"]');
+            if (ta) {
+              ta.value = html;
+              ta.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            }
+            return false;
+          }, fullHtml).catch(() => false);
+
           const len = await body.first().evaluate(el => el.innerHTML.length).catch(() => 0);
+          console.log(`[エディタ] 方式3: iframe注入 ${len} 文字, CKEditor同期: ${synced ? '成功' : '失敗'}`);
           if (len > 10) {
-            console.log(`[エディタ] 方式2成功: iframe contenteditable に ${len} 文字入力完了`);
             return true;
           }
         }
@@ -281,54 +326,22 @@ async function injectEditorContent(page, fullHtml) {
     }
   }
 
-  // --- 方式3: 直接 contenteditable の div ---
-  console.log('[エディタ] 方式3: contenteditable div を試行中...');
-  const ceSelectors = [
-    'div[contenteditable="true"].cke_editable',
-    'div[contenteditable="true"][role="textbox"]',
-    'div.ql-editor',
-    '[data-testid="entry-body-editor"]',
-    'div[contenteditable="true"]'
-  ];
-  for (const ceSel of ceSelectors) {
-    const ce = page.locator(ceSel).first();
-    if (await ce.isVisible().catch(() => false)) {
-      console.log(`[エディタ] contenteditable div検出: ${ceSel}`);
-      await ce.evaluate((el, html) => {
-        el.innerHTML = html;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }, fullHtml);
-      await page.waitForTimeout(500);
-      const len = await ce.evaluate(el => el.innerHTML.length).catch(() => 0);
-      if (len > 10) {
-        console.log(`[エディタ] 方式3成功: contenteditable div に ${len} 文字入力完了`);
-        return true;
-      }
-    }
-  }
-
-  // --- 方式4: 最終手段 - CKEditorインスタンス + hidden要素へのJS注入 ---
-  console.log('[エディタ] 方式4: 最終手段 - 全entry_text要素へのJS注入...');
+  // --- 方式4: hidden textarea直接書き込み ---
+  console.log('[エディタ] 方式4: hidden textarea直接書き込みを試行中...');
   const injected = await page.evaluate((html) => {
     let success = false;
-    const targets = document.querySelectorAll('textarea[name="entry_text"], input[name="entry_text"], #entryText, #entry_text');
+    const targets = document.querySelectorAll('textarea[name="entry_text"], #entryText, #entry_text');
     targets.forEach(el => {
       el.value = html;
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       success = true;
     });
-    if (typeof CKEDITOR !== 'undefined') {
-      for (const name in CKEDITOR.instances) {
-        CKEDITOR.instances[name].setData(html);
-        success = true;
-      }
-    }
     return success;
   }, fullHtml).catch(() => false);
 
   if (injected) {
-    console.log('[エディタ] 方式4成功: JS直接注入で本文を設定しました。');
+    console.log('[エディタ] 方式4成功: hidden textarea に直接書き込みました。');
     return true;
   }
 
@@ -338,7 +351,8 @@ async function injectEditorContent(page, fullHtml) {
     const iframes = [...document.querySelectorAll('iframe')].map(f => ({ tag: 'iframe', id: f.id, class: f.className, src: f.src, title: f.title }));
     const textareas = [...document.querySelectorAll('textarea')].map(t => ({ tag: 'textarea', id: t.id, name: t.name, class: t.className, visible: t.offsetParent !== null }));
     const editables = [...document.querySelectorAll('[contenteditable]')].map(e => ({ tag: e.tagName, id: e.id, class: e.className, role: e.getAttribute('role') }));
-    return { iframes, textareas, editables };
+    const hasCKE = typeof CKEDITOR !== 'undefined';
+    return { iframes, textareas, editables, hasCKEditor: hasCKE };
   }).catch(() => ({}));
   console.error('[エディタ] DOM構造:', JSON.stringify(debugInfo, null, 2));
   return false;
@@ -489,6 +503,17 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
       await sleep(delaySec * 1000);
     }
 
+    // --- 投稿前にCKEditorデータをフォームに同期 ---
+    console.log('CKEditorデータをフォームに同期中...');
+    await page.evaluate(() => {
+      if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
+        for (const name in CKEDITOR.instances) {
+          CKEDITOR.instances[name].updateElement();
+        }
+      }
+    }).catch(() => {});
+    await page.waitForTimeout(500);
+
     // --- 投稿ボタン押下 ---
     console.log('「投稿する」ボタンを押下中...');
     const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), [data-testid="entry-submit-button"]').first();
@@ -510,13 +535,31 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     if (endUrl.includes('entryend') || endUrl.includes('complete') || !endUrl.includes('srventryinsertinput.do')) {
       console.log('【投稿成功】記事の投稿完了画面への遷移を確認しました！');
     } else {
-      const errorMsg = await page.locator('.c-errorMessage, [class*="error"], .error-message').allInnerTexts().catch(() => []);
-      const filtered = errorMsg.filter(t => t.trim().length > 0 && !t.includes('詳しく見る') && !t.includes('戻る'));
-      if (filtered.length > 0) {
-        console.error('【投稿失敗】画面エラー:', filtered.join(' | '));
-        throw new Error(`投稿失敗: ${filtered.join(' | ')}`);
+      // フォームバリデーションエラーのみを検出（サイドバーウィジェットを除外）
+      const validationErrors = await page.evaluate(() => {
+        const msgs = [];
+        // Amebaのフォームバリデーションエラー要素
+        const errorEls = document.querySelectorAll('.c-errorMessage, .entryEditError, [class*="validation"], .js-errorMessage');
+        errorEls.forEach(el => {
+          const text = el.textContent?.trim();
+          if (text && text.length > 0) msgs.push(text);
+        });
+        // 「本文を入力してください」等のフォームバリデーションテキストを検索
+        const allPs = document.querySelectorAll('#entryEditInner p, .entryEditArea p, form p');
+        allPs.forEach(el => {
+          const text = el.textContent?.trim();
+          if (text && (text.includes('入力してください') || text.includes('文字以内'))) {
+            msgs.push(text);
+          }
+        });
+        return msgs;
+      }).catch(() => []);
+
+      if (validationErrors.length > 0) {
+        console.error('【投稿失敗】フォームバリデーションエラー:', validationErrors.join(' | '));
+        throw new Error(`投稿失敗: ${validationErrors.join(' | ')}`);
       } else {
-        console.warn('【注意】投稿画面から遷移しませんでした。投稿状態を確認してください。');
+        console.warn('【注意】投稿画面から遷移しませんでした。投稿が成功した可能性もあります。ブログを確認してください。');
       }
     }
 
