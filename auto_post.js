@@ -238,8 +238,6 @@ ${profileContent}
 
   // --- C. フォールバック記事生成 ---
   console.log('AI API不可のため、比較フォールバック記事を生成します。');
-  const nameA = itemPair.itemA.itemName.slice(0, 18);
-  const nameB = itemPair.itemB.itemName.slice(0, 18);
   const title = `【比較】${nameA} VS ${nameB} どっちが買い？`;
 
   const contentHtml = `
