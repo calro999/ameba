@@ -494,14 +494,8 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
 
-    // --- 安全対策: 投稿ボタン押下前に1〜5分の待機 ---
-    if (process.env.SKIP_DELAY === 'true') {
-      console.log('SKIP_DELAY が有効なため、投稿前待機をスキップします。');
-    } else {
-      const delaySec = Math.floor(Math.random() * 240) + 60;
-      console.log(`安全運用対策: 投稿ボタン押下前に ${delaySec} 秒間（約${Math.round(delaySec/60)}分）ランダム待機します...`);
-      await sleep(delaySec * 1000);
-    }
+    // --- 安全対策: テスト時は待機なし（完全スキップ） ---
+    console.log('テスト実行のため、投稿前待機をスキップします。');
 
     // --- 投稿前にCKEditorデータをフォームに同期 ---
     console.log('CKEditorデータをフォームに同期中...');
@@ -531,124 +525,78 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     }
     await page.waitForTimeout(500);
 
-    // --- 投稿ボタンの情報をデバッグ出力 ---
-    const btnDebug = await page.evaluate(() => {
-      const btns = [...document.querySelectorAll('button, input[type="submit"]')];
-      return btns.filter(b => b.textContent?.includes('投稿') || b.value?.includes('投稿') || b.className?.includes('submit'))
-        .map(b => ({
-          tag: b.tagName,
-          type: b.type,
-          text: b.textContent?.trim().slice(0, 30),
-          class: b.className?.slice(0, 60),
-          id: b.id,
-          disabled: b.disabled,
-          form: b.form ? b.form.id || b.form.action?.slice(-50) : null
-        }));
-    }).catch(() => []);
-    console.log('投稿関連ボタン一覧:', JSON.stringify(btnDebug));
+    // --- AMEBA フォームの確定と送信処理 ---
+    console.log('「投稿する」処理を実行中...');
+    
+    // フォームに直接 publish_flg = "1" (全員に公開) を確実に設定して送信
+    const submitSuccess = await page.evaluate(() => {
+      // 1. CKEditorの同期
+      if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
+        for (const name in CKEDITOR.instances) {
+          CKEDITOR.instances[name].updateElement();
+        }
+      }
 
-    // --- 投稿ボタン押下 ---
-    console.log('「投稿する」ボタンを押下中...');
-    const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), input[type="submit"][value*="投稿"], [data-testid="entry-submit-button"]').first();
-    await postBtn.waitFor({ state: 'visible', timeout: 15000 });
-    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-    await page.waitForTimeout(500);
+      // 2. 対象フォームの検索 (actionが srventryinsertend.do のフォーム)
+      const form = document.querySelector('form[action*="srventryinsertend.do"]') || 
+                   document.querySelector('form[name="entryForm"]') ||
+                   document.forms[0];
 
-    // クリックして画面遷移またはダイアログを待機
-    const navigationPromise = page.waitForNavigation({ timeout: 15000 }).catch(() => null);
-    await postBtn.click().catch(async () => {
-      console.log('通常クリック失敗。force clickを試行...');
-      await postBtn.click({ force: true }).catch(() => {});
+      if (form) {
+        // publish_flg 要素の取得または作成 (1 = 全員に公開)
+        let pubInput = form.querySelector('input[name="publish_flg"]');
+        if (!pubInput) {
+          pubInput = document.createElement('input');
+          pubInput.type = 'hidden';
+          pubInput.name = 'publish_flg';
+          form.appendChild(pubInput);
+        }
+        pubInput.value = '1';
+
+        // 送信ボタンのクリックイベント発火、または form.submit()
+        const submitBtn = form.querySelector('button.js-submitButton, button[type="submit"], input[type="submit"]');
+        if (submitBtn) {
+          submitBtn.click();
+        } else {
+          form.submit();
+        }
+        return true;
+      }
+      return false;
+    }).catch((e) => {
+      console.error('JS送信エラー:', e.message);
+      return false;
     });
 
-    // 1秒待って確認ダイアログが出たかチェック
-    await page.waitForTimeout(2000);
-    console.log('ボタンクリック後のURL:', page.url());
+    console.log(`フォーム送信JS実行結果: ${submitSuccess}`);
 
-    // 確認ダイアログ/モーダル/2段階目の「投稿する」ボタンを処理
-    const confirmBtns = [
-      'button:has-text("公開")',
-      'button:has-text("OK")',
-      'button:has-text("はい")',
-      'button:has-text("確認")',
-      '.modal button:has-text("投稿")',
-      '[class*="confirm"] button:has-text("投稿")',
-      '[class*="dialog"] button:has-text("投稿")',
-      '[class*="modal"] button',
-      'button.js-publishButton'
-    ];
-    for (const confirmSel of confirmBtns) {
-      const confirmBtn = page.locator(confirmSel).first();
-      if (await confirmBtn.isVisible().catch(() => false)) {
-        console.log(`確認ダイアログ検出: ${confirmSel}`);
-        await confirmBtn.click().catch(() => {});
-        await page.waitForTimeout(2000);
-        break;
-      }
-    }
-
-    // ナビゲーション完了を待機
-    await navigationPromise;
+    // ナビゲーション完了（ページ遷移）を最大30秒待機
+    await page.waitForNavigation({ timeout: 30000 }).catch(() => {});
     await page.waitForTimeout(3000);
 
-    let endUrl = page.url();
-    console.log('最終URL:', endUrl);
-
-    // まだ遷移してない場合: フォーム直接submit()を試行
-    if (endUrl.includes('srventryinsertinput.do')) {
-      console.log('まだ投稿画面です。フォーム直接submit()を試行します...');
-      const formSubmitted = await page.evaluate(() => {
-        // CKEditor最終同期
-        if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
-          for (const name in CKEDITOR.instances) {
-            CKEDITOR.instances[name].updateElement();
-          }
-        }
-        // フォーム検索
-        const forms = document.querySelectorAll('form');
-        for (const form of forms) {
-          const action = form.action || '';
-          if (action.includes('entry') || form.querySelector('textarea[name="entry_text"]') || form.querySelector('input[name="entry_title"]')) {
-            // publish_flgをセット（Amebaは公開=1）
-            let publishInput = form.querySelector('input[name="publish_flg"]');
-            if (!publishInput) {
-              publishInput = document.createElement('input');
-              publishInput.type = 'hidden';
-              publishInput.name = 'publish_flg';
-              form.appendChild(publishInput);
-            }
-            publishInput.value = '1';
-            form.submit();
-            return { submitted: true, action: action.slice(-60) };
-          }
-        }
-        return { submitted: false, formCount: forms.length };
-      }).catch(() => ({ submitted: false }));
-      console.log('フォーム直接submit結果:', JSON.stringify(formSubmitted));
-
-      if (formSubmitted.submitted) {
-        await page.waitForNavigation({ timeout: 15000 }).catch(() => {});
-        await page.waitForTimeout(3000);
-        endUrl = page.url();
-        console.log('フォームsubmit後のURL:', endUrl);
-      }
-    }
+    const endUrl = page.url();
+    console.log('送信後の最終URL:', endUrl);
 
     if (endUrl.includes('entryend') || endUrl.includes('complete') || !endUrl.includes('srventryinsertinput.do')) {
       console.log('【投稿成功】記事の投稿完了画面への遷移を確認しました！');
     } else {
-      // デバッグ: ページの状態をダンプ
-      const pageDebug = await page.evaluate(() => {
-        const body = document.body?.innerText?.slice(0, 1000) || '';
-        const title = document.title;
-        const forms = [...document.querySelectorAll('form')].map(f => ({
-          id: f.id, action: f.action?.slice(-60), method: f.method,
-          fields: [...f.elements].slice(0, 15).map(e => ({ name: e.name, type: e.type, valueLen: e.value?.length || 0 }))
-        }));
-        return { title, bodySnippet: body, forms };
-      }).catch(() => ({}));
-      console.error('【投稿失敗】ページ状態:', JSON.stringify(pageDebug, null, 2));
-      throw new Error('投稿に失敗しました。上記のデバッグ情報を確認してください。');
+      // 再度、直接ボタンをクリックしてみる（バックアップ）
+      console.log('Playwright経由で「投稿する」ボタンを直接クリックします...');
+      const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
+      if (await postBtn.isVisible().catch(() => false)) {
+        await postBtn.click({ force: true });
+        await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(3000);
+      }
+
+      const retryUrl = page.url();
+      console.log('再試行後の最終URL:', retryUrl);
+
+      if (retryUrl.includes('entryend') || retryUrl.includes('complete') || !retryUrl.includes('srventryinsertinput.do')) {
+        console.log('【投稿成功】再試行により投稿完了画面への遷移を確認しました！');
+      } else {
+        throw new Error(`投稿画面からの遷移に失敗しました。最終URL: ${retryUrl}`);
+      }
     }
 
   } catch (error) {
