@@ -580,27 +580,33 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
 
       // --- CoverConfirmModal（カバー画像・投稿確認モーダル）などの各種確認ダイアログの処理 ---
       const modalSelectors = [
-        '.CoverConfirmModal button:has-text("投稿する")',
-        '.CoverConfirmModal button:has-text("公開する")',
-        '.CoverConfirmModal button:has-text("設定せずに投稿する")',
-        '.CoverConfirmModal button:has-text("このまま投稿する")',
-        '.ucsCommonModal button:has-text("投稿する")',
-        '.ucsCommonModal button:has-text("公開")',
-        '.c-modal button:has-text("投稿")',
+        '.CoverConfirmModal button',
+        '.ucsCommonModal button',
         'button:has-text("このまま投稿")',
         'button:has-text("設定せずに投稿")',
+        'button:has-text("投稿する")',
+        'button:has-text("公開する")',
+        'button:has-text("公開")',
         'button:has-text("移動する")'
       ];
 
+      console.log('モーダル内の確定ボタンを走査・クリックします...');
       for (const selector of modalSelectors) {
-        const modalBtn = page.locator(selector).first();
-        if (await modalBtn.isVisible().catch(() => false)) {
-          console.log(`確認モーダル内のボタンを検出しました: [${selector}] -> クリックします`);
-          await modalBtn.click({ force: true }).catch(() => {});
-          await page.waitForTimeout(2000);
-          break;
+        const modalBtns = page.locator(selector);
+        const count = await modalBtns.count().catch(() => 0);
+        if (count > 0) {
+          for (let i = 0; i < count; i++) {
+            const btn = modalBtns.nth(i);
+            if (await btn.isVisible().catch(() => false)) {
+              const txt = await btn.innerText().catch(() => '');
+              console.log(`モーダル内ボタン検出: [${selector}] (${txt}) -> 強制クリック`);
+              await btn.click({ force: true }).catch(() => {});
+              await page.waitForTimeout(1000);
+            }
+          }
         }
       }
+      await page.waitForTimeout(3000);
     }
 
     await page.waitForTimeout(3000);
