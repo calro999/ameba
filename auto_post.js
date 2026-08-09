@@ -39,7 +39,40 @@ function getProfileData() {
   return '';
 }
 
-// 1. 楽天APIから2つの異なる商品情報（比較用）とアフィリエイトリンクを取得
+// 不用なパーツ・付属品・オプションを除外する判定関数
+function isMainProduct(item) {
+  const name = item.itemName;
+  const price = item.itemPrice;
+
+  // NGキーワード（パーツ、部品、アクセサリー、専用ケース等）
+  const ngKeywords = [
+    '延長輪', 'パーツ', '部品', '交換', '専用レシピ', 'レシピ本',
+    'カバーのみ', 'プレートのみ', 'ケースのみ', '枠のみ', 'コードのみ',
+    'アダプター', '替', 'オプション', '追加用', '専用袋', 'お手入れ', '洗剤',
+    '【部品】', '【パーツ】', '専用ボトル', '専用容器'
+  ];
+
+  for (const kw of ngKeywords) {
+    if (name.includes(kw)) return false;
+  }
+
+  // 価格が安すぎる商品（付属品の可能性が高い）を排除（2,000円未満を除外）
+  if (price < 2000) return false;
+
+  return true;
+}
+
+// 長すぎる型番や注意書き・【ブラケット】をきれいにクレンジングする関数
+function cleanProductName(name) {
+  return name
+    .replace(/【.*?】|\[.*?\]|（.*?）|\(.*?\)/g, '') // ブラケットや括弧内の文字を削除
+    .replace(/※.*/g, '') // ※以降の注意書きを削除
+    .replace(/送料無料|ポイント\d+倍|セール|在庫処分/gi, '')
+    .trim()
+    .slice(0, 30); // 読みやすいように30文字以内に整形
+}
+
+// 1. 楽天APIから2つの異なるメイン商品情報（比較用）とアフィリエイトリンクを取得
 async function fetchRakutenItemPair(keyword) {
   const appId = process.env.RAKUTEN_APPLICATION_ID;
   const affId = process.env.RAKUTEN_AFFILIATE_ID;
@@ -70,9 +103,15 @@ async function fetchRakutenItemPair(keyword) {
   if (!data || !data.Items || data.Items.length === 0) return null;
 
   const postedList = getPostedItems();
-  // 過去に投稿されたことのない商品のみフィルタ
-  const availableItems = data.Items.filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
-  const pool = availableItems.length >= 2 ? availableItems : data.Items;
+
+  // ① パーツや付属品を除外し、メイン家電本体のみをフィルタリング
+  const mainProducts = data.Items.filter(i => isMainProduct(i.Item));
+
+  // ② 過去に投稿されていない商品に絞る
+  const availableItems = mainProducts.filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
+
+  // 候補数が足りない場合はmainProducts全体から選択
+  const pool = availableItems.length >= 2 ? availableItems : (mainProducts.length >= 2 ? mainProducts : data.Items);
 
   if (pool.length < 2) return null;
 
@@ -88,12 +127,14 @@ async function fetchRakutenItemPair(keyword) {
   return {
     itemA: {
       itemName: itemA.itemName,
+      cleanName: cleanProductName(itemA.itemName),
       itemUrl: itemA.affiliateUrl || itemA.itemUrl,
       imageUrl: itemA.mediumImageUrls?.[0]?.imageUrl || itemA.mediumImageUrls?.[0] || '',
       price: itemA.itemPrice
     },
     itemB: {
       itemName: itemB.itemName,
+      cleanName: cleanProductName(itemB.itemName),
       itemUrl: itemB.affiliateUrl || itemB.itemUrl,
       imageUrl: itemB.mediumImageUrls?.[0]?.imageUrl || itemB.mediumImageUrls?.[0] || '',
       price: itemB.itemPrice
@@ -107,6 +148,9 @@ async function generateArticlePair(itemPair) {
   const groqApiKey = process.env.GROQ_API_KEY;
   const profileContent = getProfileData();
 
+  const nameA = itemPair.itemA.cleanName || itemPair.itemA.itemName.slice(0, 20);
+  const nameB = itemPair.itemB.cleanName || itemPair.itemB.itemName.slice(0, 20);
+
   const prompt = `
 以下の【プロフィール設定】と【2つの比較商品情報】を基に、Amebaブログ用のオリジナル2商品比較・レビュー記事を作成してください。
 
@@ -114,20 +158,20 @@ async function generateArticlePair(itemPair) {
 ${profileContent}
 
 【比較商品A】:
-- 商品名: ${itemPair.itemA.itemName}
+- 商品名: ${nameA}
 - 価格: ${itemPair.itemA.price}円
 
 【比較商品B】:
-- 商品名: ${itemPair.itemB.itemName}
+- 商品名: ${nameB}
 - 価格: ${itemPair.itemB.price}円
 
 【執筆ルール・絶対厳守事項】:
 1. **注意：文章中に「（ここにアフィリエイトリンク）」「【リンク】」などのプレースホルダー文言は絶対に一切書かないでください。純粋なレビュー本文のみを記述してください。**
 2. 文章構成と読みやすさ（改行重視）:
    - スマホ読者を意識し、**句点（。）のあとや会話の切れ目には必ず <br><br> を入れ、行間・改行をしっかり空けて非常に読みやすく**してください。
-   - ① 導入（「〜と〜、結局どっちを選ぶべき？」というリアルな悩みや比較視点）
-   - ② 「<h2>💡 ${itemPair.itemA.itemName.slice(0, 15)}... の特徴と魅力</h2>」という見出しで商品Aを詳しく解説
-   - ③ 「<h2>💡 ${itemPair.itemB.itemName.slice(0, 15)}... の特徴と魅力</h2>」という見出しで商品Bを詳しく解説
+   - ① 導入（「${nameA}」と「${nameB}」、結局どっちを選ぶべき？というリアルな悩みや比較視点）
+   - ② 「<h2>💡 ${nameA} の特徴と魅力</h2>」という見出しで商品Aを詳しく解説
+   - ③ 「<h2>💡 ${nameB} の特徴と魅力</h2>」という見出しで商品Bを詳しく解説
    - ④ 「<h2>⚖️ どちらを選ぶべき？比較まとめ</h2>」（使い勝手、お手入れ、コスパ等の視点別比較）
    - ⑤ 結論（「一人飲み・手軽さ重視ならA、大人数・本格重視ならB！」など明快な提案）
 3. 口調: 気取らない・ちょっと大人・居酒屋っぽい、「〜なんですよね」「〜かなと思います」の自然な会話調。
@@ -136,7 +180,7 @@ ${profileContent}
 以下のJSON形式のみで出力してください（Markdownコードブロック表記不可）：
 {
   "title": "記事タイトル",
-  "contentHtml": "<p>導入文...</p><br><br><h2>💡 商品Aの特徴...</h2><p>解説...</p><br><br><h2>💡 商品Bの特徴...</h2><p>解説...</p>",
+  "contentHtml": "<p>導入文...</p><br><br><h2>💡 ${nameA} の特徴と魅力</h2><p>解説...</p><br><br><h2>💡 ${nameB} の特徴と魅力</h2><p>解説...</p>",
   "tags": ["家電比較", "おうち居酒屋", "晩酌グッズ", "楽天おすすめ"]
 }
 `;
@@ -385,90 +429,73 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
     }).catch(() => {});
     await page.waitForTimeout(500);
 
-    // --- 決定的な「投稿する」＆「カバーなしで投稿する」自動クリックフロー ---
-    console.log('「投稿する」ボタンの検索とクリックを開始します...');
-    
-    // エディタ画面の投稿ボタンをクリック
-    const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
-    await postBtn.waitFor({ state: 'visible', timeout: 15000 });
-    await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-    await postBtn.click({ force: true }).catch(async () => {
-      await postBtn.evaluate(b => b.click());
-    });
+    // --- AMEBA フォーム送信＆公開確定処理 ---
+    console.log('「全員に公開（投稿）」処理を実行中...');
 
-    console.log('「投稿する」ボタンを押しました。モーダルアニメーションを待機中...');
-    await page.waitForTimeout(2500);
-
-    // カバー画像設定確認モーダル（CoverConfirmModal）内の「カバーなしで投稿する」ボタンの物理クリック
-    console.log('Playwrightで「カバーなしで投稿する」ボタンを検出・物理クリックします...');
-    
-    const coverBtnLocator = page.locator('.CoverConfirmModal button:has-text("カバーなしで投稿する"), button:has-text("カバーなしで投稿する"), button:has-text("設定せずに投稿")').first();
-    let clicked = false;
-
-    if (await coverBtnLocator.isVisible({ timeout: 5000 }).catch(() => false)) {
-      console.log('Playwright: モーダルボタンを検出！物理クリックを実行します...');
-      await coverBtnLocator.scrollIntoViewIfNeeded().catch(() => {});
-      await coverBtnLocator.focus().catch(() => {});
-      await coverBtnLocator.click({ force: true }).catch(() => {});
-      await page.keyboard.press('Enter').catch(() => {});
-      clicked = true;
-    } else {
-      console.log('Playwrightでの検出失敗。JS全探索クリックを発行します...');
-      const coverClicked = await page.evaluate(() => {
-        const buttons = [...document.querySelectorAll('button, a')];
-        const target = buttons.find(b => b.innerText?.trim()?.includes('カバーなしで投稿'));
-        if (target) {
-          target.click();
-          target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          return true;
+    // 1. Amebaのメイン送信フォーム (srventryinsertend.do) を直接キックして確実に公開画面へ遷移
+    const directSubmitSuccess = await page.evaluate(() => {
+      // CKEditorデータを隠しtextareaに同期
+      if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
+        for (const name in CKEDITOR.instances) {
+          CKEDITOR.instances[name].updateElement();
         }
-        return false;
-      }).catch(() => false);
-      clicked = coverClicked;
-    }
-
-    console.log(`ボタンクリック結果: ${clicked}`);
-
-    console.log('投稿完了画面（またはURL変更）への推移を監視中...');
-    
-    // URLの変化を最高20秒間チェック（500msごと）
-    let isSuccess = false;
-    for (let i = 0; i < 40; i++) {
-      await page.waitForTimeout(500);
-      const cur = page.url();
-      if (cur.includes('entryend') || cur.includes('complete') || !cur.includes('srventryinsertinput.do')) {
-        isSuccess = true;
-        console.log(`【URL推移検知】 ${cur}`);
-        break;
       }
-    }
 
-    // もし20秒経過してもURLが変わっていない場合、JSで直接 entryForm を submit
-    if (!isSuccess) {
-      console.log('画面が推移していません。全フォームの強制submitを最終発行します...');
-      await page.evaluate(() => {
-        const form = document.querySelector('form[action*="srventryinsertend.do"]') || document.forms[0];
-        if (form) {
-          let p = form.querySelector('input[name="publish_flg"]');
-          if (!p) {
-            p = document.createElement('input');
-            p.type = 'hidden';
-            p.name = 'publish_flg';
-            form.appendChild(p);
-          }
-          p.value = '1';
-          form.submit();
+      // 投稿フォームを取得
+      const form = document.querySelector('form[action*="srventryinsertend.do"]') || 
+                   document.querySelector('form[name="entryForm"]') ||
+                   document.forms[0];
+
+      if (form) {
+        // publish_flg (公開フラグ) を 1 (=全員に公開) に固定設定
+        let pubInput = form.querySelector('input[name="publish_flg"]');
+        if (!pubInput) {
+          pubInput = document.createElement('input');
+          pubInput.type = 'hidden';
+          pubInput.name = 'publish_flg';
+          form.appendChild(pubInput);
         }
-      }).catch(() => {});
+        pubInput.value = '1';
 
-      await page.waitForTimeout(5000);
+        // フォームを直接送信
+        form.submit();
+        return true;
+      }
+      return false;
+    }).catch(() => false);
+
+    console.log(`直接フォーム送信キック: ${directSubmitSuccess}`);
+
+    // ナビゲーション待機
+    await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+
+    let curUrl = page.url();
+    console.log('直接送信後のURL:', curUrl);
+
+    // まだ遷移していなければ Playwright で「投稿する」ボタンを押してダイアログを処理
+    if (curUrl.includes('srventryinsertinput.do')) {
+      console.log('Playwright経由で「投稿する」ボタンを直接クリックします...');
+      const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
+      if (await postBtn.isVisible().catch(() => false)) {
+        await postBtn.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(2000);
+
+        // カバー確認モーダルが出た場合「カバーなしで投稿する」を直押し
+        const coverBtn = page.locator('*:has-text("カバーなしで投稿"), *:has-text("設定せずに投稿")').first();
+        if (await coverBtn.isVisible().catch(() => false)) {
+          await coverBtn.click({ force: true }).catch(() => {});
+        }
+        await page.waitForNavigation({ timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(3000);
+      }
     }
 
     const finalUrl = page.url();
     console.log('最終確定URL:', finalUrl);
 
     if (finalUrl.includes('entryend') || finalUrl.includes('complete') || !finalUrl.includes('srventryinsertinput.do')) {
-      console.log('【祝・投稿成功】Amebaブログへの記事投稿完了を確認しました！');
+      console.log('【祝・投稿成功】Amebaブログへの記事投稿完了（公開）を確認しました！');
     } else {
       throw new Error(`投稿画面からの遷移に失敗しました。現在のURL: ${finalUrl}`);
     }
