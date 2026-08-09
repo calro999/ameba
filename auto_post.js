@@ -544,72 +544,68 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
     console.log('検出された投稿関連ボタン:', JSON.stringify(btnInfo, null, 2));
 
     // Playwrightでの確実な「投稿する」ボタン選択
-    const postBtn = page.locator('button.js-submitButton:has-text("投稿する"), button:has-text("投稿する"), input[type="submit"][value*="投稿"]').first();
+    const postBtn = page.locator('button.js-submitButton:has-text("投稿する")').first();
     const isPostBtnVisible = await postBtn.isVisible().catch(() => false);
 
     if (isPostBtnVisible) {
-      console.log('Playwright: 「投稿する」ボタンを検出しました。スクロールとホバーを実行します...');
+      console.log('Playwright: 「投稿する」ボタンを検出しました。スクロールとクリックを実行します...');
       await postBtn.scrollIntoViewIfNeeded().catch(() => {});
-      await postBtn.hover().catch(() => {});
-      await page.waitForTimeout(300);
+      await postBtn.click({ force: true }).catch(async (e) => {
+        console.log('通常のclickが弾かれたため、evaluate(click)を実行します:', e.message);
+        await postBtn.evaluate(b => b.click());
+      });
 
-      console.log('Playwright: 「投稿する」ボタンをクリックします...');
-      
-      // クリックと同時にページ遷移（またはXHR/Fetch通信）を監視
-      const [navResult] = await Promise.all([
-        page.waitForNavigation({ timeout: 15000 }).catch(() => null),
-        postBtn.click({ force: true }).catch(async (e) => {
-          console.log('通常のclickが弾かれたため、evaluate(click)を実行します:', e.message);
-          await postBtn.evaluate(b => b.click());
-        })
-      ]);
+      console.log('「投稿する」ボタンをクリックしました。モーダルや確認ダイアログの表示をチェック中...');
+      await page.waitForTimeout(2000);
 
-      console.log('クリック直後のナビゲーション結果:', navResult ? '遷移検知' : '遷移なし');
-    } else {
-      console.warn('Playwright: 「投稿する」ボタンが直接見つかりませんでした。JSフォーム送信を試みます。');
+      // --- CoverConfirmModal（カバー画像・投稿確認モーダル）などの各種確認ダイアログの処理 ---
+      const modalSelectors = [
+        '.CoverConfirmModal button:has-text("投稿する")',
+        '.CoverConfirmModal button:has-text("公開する")',
+        '.CoverConfirmModal button:has-text("設定せずに投稿する")',
+        '.CoverConfirmModal button:has-text("このまま投稿する")',
+        '.ucsCommonModal button:has-text("投稿する")',
+        '.ucsCommonModal button:has-text("公開")',
+        '.c-modal button:has-text("投稿")',
+        'button:has-text("このまま投稿")',
+        'button:has-text("設定せずに投稿")',
+        'button:has-text("移動する")'
+      ];
+
+      for (const selector of modalSelectors) {
+        const modalBtn = page.locator(selector).first();
+        if (await modalBtn.isVisible().catch(() => false)) {
+          console.log(`確認モーダル内のボタンを検出しました: [${selector}] -> クリックします`);
+          await modalBtn.click({ force: true }).catch(() => {});
+          await page.waitForTimeout(2000);
+          break;
+        }
+      }
     }
 
     await page.waitForTimeout(3000);
     let currentUrl = page.url();
     console.log('1次試行後のURL:', currentUrl);
 
-    // 遷移しなかった場合、JS側ですべてのフォームのsubmitイベント / publishボタンを強力キック
+    // 遷移しなかった場合、JS側で「投稿する」テキストを持つボタンまたはモーダル内ボタンのみを正確に指定
     if (currentUrl.includes('srventryinsertinput.do')) {
-      console.log('まだ投稿入力画面です。JSによる代替クリック & Form Submitを発行します...');
+      console.log('まだ投稿入力画面です。JSによる正確な「投稿する」ボタンクリックを発行します...');
 
       const jsSubmitResult = await page.evaluate(() => {
-        // CKEditor同期
-        if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
-          for (const name in CKEDITOR.instances) {
-            CKEDITOR.instances[name].updateElement();
-          }
+        // 「下書き保存」を除外し、明確に「投稿する」というテキストのみを持つボタンを検索
+        const allBtns = [...document.querySelectorAll('button, input[type="submit"]')];
+        const postBtn = allBtns.find(b => b.innerText?.trim() === '投稿する' || b.value === '投稿する');
+
+        if (postBtn) {
+          postBtn.click();
+          return { type: 'exact_post_click', text: postBtn.innerText };
         }
 
-        // 1. js-submitButton クラスを持つボタンを探してクリック
-        const targetBtn = document.querySelector('button.js-submitButton') || 
-                          [...document.querySelectorAll('button')].find(b => b.innerText.includes('投稿する'));
-        if (targetBtn) {
-          targetBtn.disabled = false;
-          targetBtn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-          targetBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-          targetBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-          targetBtn.click();
-          return { type: 'button_click', text: targetBtn.innerText };
-        }
-
-        // 2. フォーム直接送信
-        const form = document.querySelector('form[action*="srventryinsertend.do"]') || document.forms[0];
-        if (form) {
-          let pubInput = form.querySelector('input[name="publish_flg"]');
-          if (!pubInput) {
-            pubInput = document.createElement('input');
-            pubInput.type = 'hidden';
-            pubInput.name = 'publish_flg';
-            form.appendChild(pubInput);
-          }
-          pubInput.value = '1';
-          form.submit();
-          return { type: 'form_submit', action: form.action };
+        // モーダル内のボタンを探す
+        const modalBtn = document.querySelector('.CoverConfirmModal button, .ucsCommonModal button');
+        if (modalBtn) {
+          modalBtn.click();
+          return { type: 'modal_button_click', text: modalBtn.innerText };
         }
 
         return { type: 'none' };
