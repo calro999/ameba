@@ -91,7 +91,7 @@ ${profileContent}
 }
 `;
 
-    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'];
     const genAI = new GoogleGenerativeAI(apiKey);
 
     for (const modelName of models) {
@@ -105,8 +105,8 @@ ${profileContent}
         } catch (err) {
           console.log(`[Gemini API (${modelName}) 試行 ${attempt}] エラー: ${err.message}`);
           if (err.message.includes('429') || err.message.includes('Quota exceeded')) {
-            console.log('レート制限が検出されました。10秒待機してリトライします...');
-            await sleep(10000);
+            console.log('レート制限が検出されました。5秒待機して次のモデル/試行に移ります...');
+            await sleep(5000);
           } else {
             break;
           }
@@ -211,9 +211,10 @@ async function postToAmeba(title, contentHtml, tags, itemInfo) {
 
     if (page.url().includes('auth.user.ameba.jp') || page.url().includes('/signin')) {
       const pageErrors = await page.locator('[class*="error"], [class*="Error"], p, span').allInnerTexts().catch(() => []);
-      const errorMsg = pageErrors.filter(t => t && typeof t === 'string' && (t.includes('正しくあり') || t.includes('一致し') || t.includes('失敗') || t.includes('確認'))).join(' | ');
-      console.error('ログイン画面検出エラー:', errorMsg || '認証失敗（ID/パスワード不一致またはWAF制限）');
-      throw new Error(`Amebaログイン認証に失敗しました。詳細: ${errorMsg || 'ID・パスワードをご確認ください'}`);
+      const realErrors = pageErrors.filter(t => t && typeof t === 'string' && !t.includes('Twitter') && !t.includes('Facebook') && !t.includes('Google') && (t.includes('正しくあり') || t.includes('一致し') || t.includes('違います') || t.includes('お困りの方')));
+      const errorMsg = realErrors.join(' | ');
+      console.error('ログイン画面検出エラー:', errorMsg || '認証未完了（IDまたはパスワードが不正です）');
+      throw new Error(`Amebaログイン認証に失敗しました。GitHub Secretsの AMEBA_ID と AMEBA_PASSWORD をご確認ください（※ AMEBA_ID は「ブログID」ではなく「ログイン用ID」または「登録メールアドレス」を指定してください）。`);
     }
 
     console.log('ブログエディタ画面へ移動中...');
