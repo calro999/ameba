@@ -3,6 +3,30 @@ import Groq from 'groq-sdk';
 import { chromium } from 'playwright';
 import 'dotenv/config';
 import fs from 'fs';
+import { marked } from 'marked';
+
+// markedの設定（改行を <br> に自動変換する）
+marked.setOptions({
+  gfm: true,
+  breaks: true
+});
+
+// Markdown記号が含まれていた場合に完全にきれいなHTMLタグに落とし込む変換ヘルパー
+function convertToCleanHtml(rawContent) {
+  if (!rawContent) return '';
+  
+  // すでにHTMLタグがメインである場合でも、markdown記号（#や##や---や**）が残っていれば変換
+  let html = marked.parse(rawContent);
+
+  // Amebaブログ用に見映え・間隔を調整
+  html = html
+    .replace(/<hr\s*\/?>/g, '<hr style="border: none; border-top: 1px solid #ccc; margin: 30px 0;">')
+    .replace(/<h1/g, '<h1 style="font-size: 22px; font-weight: bold; margin: 25px 0 15px 0; border-bottom: 2px solid #333; padding-bottom: 8px;"')
+    .replace(/<h2/g, '<h2 style="font-size: 19px; font-weight: bold; margin: 20px 0 10px 0; background: #f7f7f7; padding: 10px; border-left: 5px solid #ff6600;"')
+    .replace(/<h3/g, '<h3 style="font-size: 17px; font-weight: bold; margin: 15px 0 8px 0; border-left: 3px solid #ff6600; padding-left: 8px;"');
+
+  return html;
+}
 
 // ユーティリティ: 指定ミリ秒待機
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -378,6 +402,7 @@ ${profileContent}
         const text = response.response.text().trim();
         const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
         const article = JSON.parse(cleanedJson);
+        article.contentHtml = convertToCleanHtml(article.contentHtml);
         console.log(`[AI生成] Gemini (${modelName}) で比較記事の生成に成功！`);
         return article;
       } catch (err) {
@@ -408,6 +433,7 @@ ${profileContent}
         });
         const text = chatCompletion.choices[0]?.message?.content || '';
         const article = JSON.parse(text);
+        article.contentHtml = convertToCleanHtml(article.contentHtml);
         console.log(`[AI生成] Groq (${m.name}) で比較記事の生成に成功！`);
         return article;
       } catch (err) {
@@ -517,8 +543,8 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
   // 「ここにアフィリエイトリンク」などのプレースホルダー文字列を強制置換・排除
   let cleanContent = rawContentHtml.replace(/（ここに.*?リンク.*?）|【ここに.*?リンク.*?】|ここにアフィリエイトリンク|\[.*?アフィリエイト.*?\]/g, '');
 
-  // 楽天アフィリエイトリンクカードは挿入せず、純粋な記事本文のみを使用（Ameba Pick手動掲載用）
-  const fullHtml = cleanContent;
+  // 確実に完全なHTML（<h2>, <h3>, <hr>, <strong>, <p>など）に変換
+  const fullHtml = convertToCleanHtml(cleanContent);
 
   const browser = await chromium.launch({
     headless: true,
