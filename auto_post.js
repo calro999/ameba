@@ -133,8 +133,11 @@ function areItemsTooSimilar(itemA, itemB) {
   return false;
 }
 
-// 1. 楽天APIから2つの異なるメイン商品情報（比較用）とアフィリエイトリンクを取得
-async function fetchRakutenItemPair(keyword) {
+// 1. 楽天APIから2つのメイン商品情報（比較用）を取得
+// 統一ルール:
+// 【パターン1】別ジャンル卓上調理家電同士の対決（例: 卓上燻製機 vs 卓上調理ポット）
+// 【パターン2】同ジャンルで「異なるブランド」同士の対決（例: ブランドAの燻製機 vs ブランドBの燻製機）
+async function fetchRakutenItemPair(primaryKeyword) {
   const appId = process.env.RAKUTEN_APPLICATION_ID;
   const affId = process.env.RAKUTEN_AFFILIATE_ID;
   const accessKey = process.env.RAKUTEN_ACCESS_KEY;
@@ -143,61 +146,81 @@ async function fetchRakutenItemPair(keyword) {
     throw new Error('RAKUTEN_APPLICATION_ID または RAKUTEN_ACCESS_KEY が設定されていません。');
   }
 
-  let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(keyword)}&hits=30&applicationId=${appId}&accessKey=${accessKey}`;
-  if (affId) {
-    url += `&affiliateId=${affId}`;
-  }
-
-  let data = null;
-  try {
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json && json.Items && json.Items.length > 0) {
-      data = json;
-    } else if (json && json.error) {
-      console.log(`[Rakuten API] エラー:`, json.error_description || json.error);
+  // 楽天API呼び出しヘルパー
+  const searchRakuten = async (kw) => {
+    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&applicationId=${appId}&accessKey=${accessKey}`;
+    if (affId) url += `&affiliateId=${affId}`;
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json && json.Items && json.Items.length > 0) {
+        return json.Items.filter(i => isMainProduct(i.Item));
+      }
+    } catch (e) {
+      console.log(`[Rakuten API エラー (${kw})]:`, e.message);
     }
-  } catch (e) {
-    console.log(`[通信エラー]:`, e.message);
-  }
-
-  if (!data || !data.Items || data.Items.length === 0) return null;
+    return [];
+  };
 
   const postedList = getPostedItems();
 
-  // ① パーツや付属品を除外し、メイン家電本体のみをフィルタリング
-  const mainProducts = data.Items.filter(i => isMainProduct(i.Item));
+  // 50% の確率で「異ジャンル比較」、50% の確率で「同ジャンル別ブランド比較」を実行
+  const useCrossGenre = Math.random() < 0.5;
 
-  // ② 過去に投稿されていない商品に絞る
-  const availableItems = mainProducts.filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
-
-  const pool = availableItems.length >= 2 ? availableItems : (mainProducts.length >= 2 ? mainProducts : data.Items);
-
-  if (pool.length < 2) return null;
-
-  // 商品Aを選択
-  const shuffle = pool.sort(() => 0.5 - Math.random());
-  const itemA = shuffle[0].Item;
-
-  // 商品Aと「メーカーも型番も異なる」商品Bを探す
+  let itemA = null;
   let itemB = null;
-  for (let i = 1; i < shuffle.length; i++) {
-    const candidate = shuffle[i].Item;
-    if (!areItemsTooSimilar(itemA, candidate)) {
-      itemB = candidate;
-      break;
+
+  if (useCrossGenre) {
+    console.log(`[比較対決モード] 【パターン1】異ジャンル対決モード`);
+    // 別のジャンルキーワードを選択
+    const secondaryKeyword = selectRandomKeyword([primaryKeyword]);
+    
+    const itemsA = (await searchRakuten(primaryKeyword)).filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
+    const itemsB = (await searchRakuten(secondaryKeyword)).filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
+
+    if (itemsA.length > 0 && itemsB.length > 0) {
+      itemA = itemsA[Math.floor(Math.random() * itemsA.length)].Item;
+      itemB = itemsB[Math.floor(Math.random() * itemsB.length)].Item;
     }
   }
 
-  if (!itemB) {
-    itemB = shuffle[1].Item;
+  // 異ジャンル比較で取得できなかった場合、または同ジャンル別ブランド比較モードの場合
+  if (!itemA || !itemB) {
+    console.log(`[比較対決モード] 【パターン2】同ジャンル・異ブランド対決モード (${primaryKeyword})`);
+    const items = (await searchRakuten(primaryKeyword)).filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
+
+    if (items.length >= 2) {
+      const shuffle = items.sort(() => 0.5 - Math.random());
+      itemA = shuffle[0].Item;
+
+      // 異なるブランド・メーカーの候補を探す
+      for (let i = 1; i < shuffle.length; i++) {
+        const candidate = shuffle[i].Item;
+        if (!areItemsTooSimilar(itemA, candidate)) {
+          itemB = candidate;
+          break;
+        }
+      }
+      if (!itemB) itemB = shuffle[1].Item;
+    } else {
+      // 件数が足りない場合、フォールバックとしてサブキーワードから補填
+      const secondaryKeyword = selectRandomKeyword([primaryKeyword]);
+      const itemsA = await searchRakuten(primaryKeyword);
+      const itemsB = await searchRakuten(secondaryKeyword);
+      if (itemsA.length > 0 && itemsB.length > 0) {
+        itemA = itemsA[0].Item;
+        itemB = itemsB[0].Item;
+      }
+    }
   }
+
+  if (!itemA || !itemB) return null;
 
   // 投稿済みリストに保存
   savePostedItem(itemA.affiliateUrl || itemA.itemUrl);
   savePostedItem(itemB.affiliateUrl || itemB.itemUrl);
 
-  console.log(`[比較対決設定] 商品A: ${itemA.itemName.slice(0, 25)} VS 商品B: ${itemB.itemName.slice(0, 25)}`);
+  console.log(`[比較対決設定確定] 商品A: ${cleanProductName(itemA.itemName)} VS 商品B: ${cleanProductName(itemB.itemName)}`);
 
   return {
     itemA: {
@@ -215,6 +238,54 @@ async function fetchRakutenItemPair(keyword) {
       price: itemB.itemPrice
     }
   };
+}
+
+// 投稿済みキーワードの記録・読み込み（「焼き鳥」「焼肉」などの連打を防止）
+function getUsedKeywords() {
+  const filePath = './used_keywords.json';
+  if (fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+}
+
+function saveUsedKeyword(keyword) {
+  const used = getUsedKeywords();
+  used.push(keyword);
+  if (used.length > 8) used.shift();
+  fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
+}
+
+// 確実に商品がヒットする実績ある「お酒のおつまみ・卓上調理家電」キーワード群
+const TABLETOP_APPLIANCE_KEYWORDS = [
+  '卓上焼き鳥器',
+  '卓上焼肉グリル',
+  '卓上燻製器',
+  '卓上電気フライヤー',
+  '卓上おでん鍋',
+  '卓上電気酒燗器',
+  '卓上電気せいろ',
+  '卓上コンパクトホットプレート',
+  '卓 たこ焼き器',
+  '卓上串カツ器',
+  '卓上保温プレート',
+  '卓上ノンフライオーブン',
+  '卓上多機能電気鍋',
+  '卓上フィッシュロースター',
+  '卓上ホットサンドメーカー'
+].map(k => k.replace('卓 たこ焼き器', '卓上たこ焼き器'));
+
+function selectRandomKeyword(excludeList = []) {
+  const usedKeywords = getUsedKeywords();
+  const available = TABLETOP_APPLIANCE_KEYWORDS.filter(k => !usedKeywords.includes(k) && !excludeList.includes(k));
+  const pool = available.length > 0 ? available : TABLETOP_APPLIANCE_KEYWORDS.filter(k => !excludeList.includes(k));
+  const chosen = pool[Math.floor(Math.random() * pool.length)] || TABLETOP_APPLIANCE_KEYWORDS[0];
+  saveUsedKeyword(chosen);
+  return chosen;
 }
 
 // 2. AIで2商品比較型記事の本文・タイトル・ハッシュタグを生成
@@ -374,7 +445,9 @@ ${profileContent}
 
 // エディタ本文にHTMLを注入する関数
 async function injectEditorContent(page, fullHtml) {
-  console.log('[エディタ] CKEditor.setData() を試行中...');
+  console.log('[エディタ] CKEditor / テキストエリアへの注入を試行中...');
+  
+  // 1. CKEditor 経由
   const ckeResult = await page.evaluate((html) => {
     if (typeof CKEDITOR !== 'undefined' && CKEDITOR.instances) {
       const names = Object.keys(CKEDITOR.instances);
@@ -394,6 +467,40 @@ async function injectEditorContent(page, fullHtml) {
 
   if (ckeResult.success) {
     console.log(`[エディタ] CKEditor.setData() 成功`);
+    await page.waitForTimeout(1000);
+    return true;
+  }
+
+  // 2. iframe (WYSIWYG) 経由
+  const iframeResult = await page.evaluate((html) => {
+    const iframe = document.querySelector('iframe.cke_wysiwyg_frame, iframe[title*="エディタ"]');
+    if (iframe && iframe.contentDocument) {
+      iframe.contentDocument.body.innerHTML = html;
+      return true;
+    }
+    return false;
+  }, fullHtml).catch(() => false);
+
+  if (iframeResult) {
+    console.log(`[エディタ] iframe innerHTML 注入 成功`);
+    await page.waitForTimeout(1000);
+    return true;
+  }
+
+  // 3. 通常のtextarea / hidden input 経由
+  const textareaResult = await page.evaluate((html) => {
+    const area = document.querySelector('textarea[name="entry_text"], #entryText, textarea.js-editor-textarea');
+    if (area) {
+      area.value = html;
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+      area.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    return false;
+  }, fullHtml).catch(() => false);
+
+  if (textareaResult) {
+    console.log(`[エディタ] textarea 注入 成功`);
     await page.waitForTimeout(1000);
     return true;
   }
@@ -566,56 +673,6 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
   } finally {
     await browser.close();
   }
-}
-
-// 投稿済みキーワードの記録・読み込み（「焼き鳥」「焼肉」などの連打を防止）
-function getUsedKeywords() {
-  const filePath = './used_keywords.json';
-  if (fs.existsSync(filePath)) {
-    try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    } catch (e) {
-      return [];
-    }
-  }
-  return [];
-}
-
-function saveUsedKeyword(keyword) {
-  const used = getUsedKeywords();
-  used.push(keyword);
-  if (used.length > 8) used.shift();
-  fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
-}
-
-const TABLETOP_APPLIANCE_KEYWORDS = [
-  '卓上コンロ 電気',
-  '卓上焼き鳥器',
-  '卓上焼肉グリル 無煙',
-  'スモークテスター 燻製器 卓上',
-  '電気フライヤー 卓上 ミニ',
-  '卓上おでん鍋',
-  '電気酒燗器',
-  '卓上チーズフォンデュ 鍋',
-  '電気せいろ 卓上',
-  'ホットプレート 卓上 小型',
-  'たこ焼き器 卓上',
-  '卓上串カツ器',
-  '卓上保温プレート',
-  'ノンフライヤー 小型 卓上',
-  '多機能 電気鍋 卓上',
-  'フィッシュロースター 卓上',
-  'ホットサンドメーカー 卓上',
-  'アヒージョ 鍋 卓上'
-];
-
-function selectRandomKeyword() {
-  const usedKeywords = getUsedKeywords();
-  const available = TABLETOP_APPLIANCE_KEYWORDS.filter(k => !usedKeywords.includes(k));
-  const pool = available.length > 0 ? available : TABLETOP_APPLIANCE_KEYWORDS;
-  const chosen = pool[Math.floor(Math.random() * pool.length)];
-  saveUsedKeyword(chosen);
-  return chosen;
 }
 
 // メイン処理
