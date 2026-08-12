@@ -289,7 +289,7 @@ function saveUsedKeyword(keyword) {
   fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
 }
 
-// 実用的で一人飲み・家飲みに活躍する卓上調理家電キーワード群（フライヤー偏重を解消）
+// 実用的で一人飲み・家飲みに活躍する卓上調理家電キーワード群（約33.3%）
 const TABLETOP_APPLIANCE_KEYWORDS = [
   '卓上たこ焼き器',
   '卓上流しそうめん器',
@@ -313,7 +313,7 @@ const TABLETOP_APPLIANCE_KEYWORDS = [
   '卓上ミニロースター'
 ];
 
-// ふるさと納税・おつまみお菓子キーワード群（甘いもの同士、塩っぽいもの同士に分類）
+// ふるさと納税・おつまみお菓子キーワード群（甘いもの同士、塩っぽいもの同士）（約33.3%）
 const SWEET_SNACK_KEYWORDS = [
   'ふるさと納税 チョコレート',
   'ふるさと納税 ケーキ 焼菓子',
@@ -332,19 +332,44 @@ const SAVORY_SNACK_KEYWORDS = [
   'ふるさと納税 ドライフルーツ ナッツ'
 ];
 
+// 本格お酒銘柄比較用キーワード群（日本酒・ウイスキー・ワイン等の銘柄同士対決）（約33.3%）
+const SAKE_KEYWORDS = [
+  '日本酒 720ml 純米大吟醸 銘柄',
+  '日本酒 吟醸 飲み比べ 銘柄',
+  '日本酒 特別純米 銘柄'
+];
+
+const WHISKY_KEYWORDS = [
+  'ウイスキー シングルモルト 銘柄 700ml',
+  'スコッチウイスキー 銘柄',
+  'ジャパニーズウイスキー 銘柄'
+];
+
+const WINE_KEYWORDS = [
+  '赤ワイン フルボディ 銘柄',
+  '白ワイン 辛口 銘柄',
+  'スパークリングワイン 銘柄'
+];
+
 function selectRandomKeyword(excludeList = []) {
   const usedKeywords = getUsedKeywords();
   
-  // 60% の高確率でおつまみ（ふるさと納税お菓子）、40% で卓上調理家電を選出
-  const isSnackMode = Math.random() < 0.6;
+  // 家電 33%、ふるさと納税お菓子 33%、お酒銘柄 33% の均等確率
+  const rand = Math.random();
   
   let keywordPool = [];
-  if (isSnackMode) {
-    // 甘いもの同士（50%）か塩っぽいもの同士（50%）
-    const isSweet = Math.random() < 0.5;
-    keywordPool = isSweet ? SWEET_SNACK_KEYWORDS : SAVORY_SNACK_KEYWORDS;
-  } else {
+  if (rand < 0.33) {
+    // 卓上調理家電（33%）
     keywordPool = TABLETOP_APPLIANCE_KEYWORDS;
+  } else if (rand < 0.66) {
+    // ふるさと納税お菓子（33%）：甘いもの同士50% / 塩っぽいもの同士50%
+    keywordPool = Math.random() < 0.5 ? SWEET_SNACK_KEYWORDS : SAVORY_SNACK_KEYWORDS;
+  } else {
+    // 本格お酒銘柄（34%）：日本酒、ウイスキー、ワインから選出
+    const liquorRand = Math.random();
+    if (liquorRand < 0.34) keywordPool = SAKE_KEYWORDS;
+    else if (liquorRand < 0.67) keywordPool = WHISKY_KEYWORDS;
+    else keywordPool = WINE_KEYWORDS;
   }
 
   const available = keywordPool.filter(k => !usedKeywords.includes(k) && !excludeList.includes(k));
@@ -466,8 +491,10 @@ ${profileContent}
    - タイトル: 「${pattern.titleTemplate}」
 
 3. **文章スタンス・語り口・改行**:
-   - **アピール・押し売り禁止**: 「おすすめです！」「買いましょう！」などの言葉は絶対に使用禁止。
-   - **ふるさと納税お菓子の場合**: 「ハイボール（やビール）を飲む時って、チョコやお煎餅のおつまみが欲しくなる。でもコンビニだと高いし...と思ったら楽天のふるさと納税で注文できると知って罪悪感ゼロで買えそう！でも美味しそうなものが多すぎてどちらにするか選べない...」という空気感を全開にしてください。
+   - **基本スタンス**: すべての記事において「自分で気になった商品を詳しく調べてはみたけど、どっちにするか決められないなー、どっちを次に買ってみようかなーと悩んでる」という個人ブログのリアルな空気感を徹底してください。
+   - **アピール・押し売り禁止**: 「おすすめです！」「買いましょう！」などの言葉は絶対に使用禁止。売ろうとせず、純粋に迷ってください。
+   - **お酒（日本酒・ウイスキー・ワイン等の銘柄比較）の場合**: 「最近お酒を色々と飲み比べてみたいなーって思ってるんですよね。じっくり味わえる本格的なお酒（銘柄）を開拓したくて。でも美味しそうな銘柄が多すぎてどれから手をつけるべきか選べない...」といったニュアンスの空気感で始めて真剣に悩んでください。
+   - **ふるさと納税お菓子の場合**: 「ハイボール（やビール）を飲む時って、チョコやお煎餅のおつまみが欲しくなる。でもコンビニだと高いし...と思ったら楽天のふるさと納税で注文できると知って罪悪感ゼロで買えそう！でも美味しそうなものが多すぎてどちらにするか選べない...」というニュアンスの空気感を出してください。
    - **卓上調理家電の場合**: 「面白そうで便利そうな一人家飲み用（卓上用）のアイテムを見つけて、真剣に買おうか悩んでいる」という空気感を出してください。
    - 句点「。」や独白の区切りごとに【必ず空行を1行挟んで改行】してください。
    - 心の声（例: **「え、これどっち買えばいいんだ？」**）や金額の差（例: **約${priceDiff}円**）は **太文字** にする。
