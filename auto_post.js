@@ -29,7 +29,7 @@ function convertToCleanHtml(rawContent) {
 // ユーティリティ: 指定ミリ秒待機
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// 投稿済み商品のコード/URLを保存・読み込みする関数（重複防止）
+// 投稿済み商品の識別情報（JANコード, itemCode, URL, クリーン商品名）を保存・読み込みする関数（永久重複防止）
 function getPostedItems() {
   const filePath = './posted_items.json';
   if (fs.existsSync(filePath)) {
@@ -42,12 +42,37 @@ function getPostedItems() {
   return [];
 }
 
-function savePostedItem(itemUrl) {
+function getItemIdentifiers(item) {
+  if (!item) return [];
+  const ids = [];
+  if (item.janCode) ids.push(`JAN:${item.janCode}`);
+  if (item.itemCode) ids.push(`CODE:${item.itemCode}`);
+  if (item.affiliateUrl) ids.push(`URL:${item.affiliateUrl}`);
+  if (item.itemUrl) ids.push(`URL:${item.itemUrl}`);
+  if (item.cleanName) ids.push(`NAME:${item.cleanName}`);
+  return ids;
+}
+
+function isItemAlreadyPosted(item, postedList) {
+  if (!item || !postedList || postedList.length === 0) return false;
+  const ids = getItemIdentifiers(item);
+  return ids.some(id => postedList.includes(id));
+}
+
+function savePostedItem(item) {
   const posted = getPostedItems();
-  if (!posted.includes(itemUrl)) {
-    posted.push(itemUrl);
-    // 最新50件のみ保持
-    if (posted.length > 50) posted.shift();
+  const ids = typeof item === 'object' ? getItemIdentifiers(item) : [`URL:${item}`];
+  let updated = false;
+
+  for (const id of ids) {
+    if (!posted.includes(id)) {
+      posted.push(id);
+      updated = true;
+    }
+  }
+
+  if (updated) {
+    // 永久履歴として全件保持（shiftによる件数上限削除）
     fs.writeFileSync('./posted_items.json', JSON.stringify(posted, null, 2));
   }
 }
@@ -212,7 +237,12 @@ async function fetchRakutenItemPair(primaryObj) {
   let itemB = null;
 
   console.log(`[比較対決モード] 同カテゴリ・異ブランド比較モード (検索キーワード: ${primaryKeyword}, カテゴリ: ${category})`);
-  const items = (await searchRakuten(primaryKeyword)).filter(i => !postedList.includes(i.Item.affiliateUrl || i.Item.itemUrl));
+  // 1度でも投稿されたJANコード・itemCode・URL・商品名のアイテムを排除
+  const rawItems = await searchRakuten(primaryKeyword);
+  const items = rawItems.filter(i => {
+    i.Item.cleanName = cleanProductName(i.Item.itemName);
+    return !isItemAlreadyPosted(i.Item, postedList);
+  });
 
   if (items.length >= 2) {
     const shuffle = items.sort(() => 0.5 - Math.random());
@@ -229,15 +259,18 @@ async function fetchRakutenItemPair(primaryObj) {
     if (!itemB) itemB = shuffle[1].Item;
   } else {
     // 件数が足りない場合、同じカテゴリ内のキーワードから補填（異カテゴリ混入を防止）
-    console.log(`[補填モード] キーワード「${primaryKeyword}」の件数不足のため、同カテゴリ内から代替検索`);
+    console.log(`[補填モード] キーワード「${primaryKeyword}」の未投稿商品が不足のため、同カテゴリ内から代替検索`);
     let sameCategoryPool = [];
     if (category === 'liquor') sameCategoryPool = [...SAKE_KEYWORDS, ...WHISKY_KEYWORDS, ...WINE_KEYWORDS];
     else if (category === 'snack') sameCategoryPool = [...SWEET_SNACK_KEYWORDS, ...SAVORY_SNACK_KEYWORDS];
     else sameCategoryPool = TABLETOP_APPLIANCE_KEYWORDS;
 
     const altKw = sameCategoryPool.filter(k => k !== primaryKeyword)[Math.floor(Math.random() * sameCategoryPool.length)] || primaryKeyword;
-    const itemsA = await searchRakuten(primaryKeyword);
-    const itemsB = await searchRakuten(altKw);
+    const rawA = await searchRakuten(primaryKeyword);
+    const rawB = await searchRakuten(altKw);
+    const itemsA = rawA.map(i => (i.Item.cleanName = cleanProductName(i.Item.itemName), i)).filter(i => !isItemAlreadyPosted(i.Item, postedList));
+    const itemsB = rawB.map(i => (i.Item.cleanName = cleanProductName(i.Item.itemName), i)).filter(i => !isItemAlreadyPosted(i.Item, postedList));
+
     if (itemsA.length > 0 && itemsB.length > 0) {
       itemA = itemsA[0].Item;
       itemB = itemsB[0].Item;
@@ -246,9 +279,9 @@ async function fetchRakutenItemPair(primaryObj) {
 
   if (!itemA || !itemB) return null;
 
-  // 投稿済みリストに保存
-  savePostedItem(itemA.affiliateUrl || itemA.itemUrl);
-  savePostedItem(itemB.affiliateUrl || itemB.itemUrl);
+  // JANコード・商品コード・URL・商品名の識別子を永続保存
+  savePostedItem(itemA);
+  savePostedItem(itemB);
 
   console.log(`[比較対決設定確定] [カテゴリ:${category}] 商品A: ${cleanProductName(itemA.itemName)} VS 商品B: ${cleanProductName(itemB.itemName)}`);
 
