@@ -72,7 +72,7 @@ function savePostedItem(item) {
   }
 
   if (updated) {
-    // 永久履歴として全件保持（shiftによる件数上限削除）
+    // 永久履歴として全件保持
     fs.writeFileSync('./posted_items.json', JSON.stringify(posted, null, 2));
   }
 }
@@ -86,41 +86,42 @@ function getProfileData() {
   return '';
 }
 
-// 不用なパーツ・付属品・オプション・業務用大型機器を除外する判定関数
+// 単品商品のみを厳選し、セット・飲み比べ・食べ比べ・付属品・業務用を徹底排除する判定関数
 function isMainProduct(item) {
   const name = item.itemName;
   const price = item.itemPrice;
 
-  // NGキーワード（パーツ、部品、業務用大型機器、店舗用、アクセサリー、セット・まとめ・詰め合わせ商品等）
+  // NGキーワード（セット商品・飲み比べ・食べ比べ・複数本・ケース買い・付属品等の徹底排除）
   const ngKeywords = [
-    '延長輪', 'パーツ', '部品', '交換', '専用レシピ', 'レシピ本',
-    'カバーのみ', 'プレートのみ', 'ケースのみ', '枠のみ', 'コードのみ',
-    'アダプター', '替', 'オプション', '追加用', '専用袋', 'お手入れ', '洗剤',
-    '【部品】', '【パーツ】', '専用ボトル', '専用容器',
-    '業務用', '店舗用', '施設用', '大容量フライヤー', '三相200V', '単相200V',
-    '厨房', 'プロ用', '10L', '12L', '15L', '20L', '大型フライヤー',
-    'セット', 'まとめ', '食べ比べ', '飲み比べ', '詰め合わせ', 'アソート'
+    'セット', 'まとめ買い', '飲み比べ', '食べ比べ', '詰め合わせ', 'アソート',
+    '2本', '3本', '4本', '5本', '6本', '12本', '24本', '本組', '本入', '缶入',
+    '2個', '3個', '4個', '5個', '6個', '個入', '箱入', '2箱', '3箱',
+    'バラエティ', 'セレクト', 'ギフトセット', 'パック', '箱買い', 'ケース販売', 'ケース買い', '1ケース', '2ケース',
+    '化粧箱のみ', 'ギフト箱のみ', '専用箱のみ', '包装紙のみ', 'のしのみ',
+    '【パーツ】', '【部品】', '交換用', 'ミニボトル', 'お試しミニ', 'ミニチュア',
+    '業務用', '店舗用', '施設用', '大容量業務用',
+    '空ボトル', '空瓶', 'グラスのみ', 'タンブラーのみ'
   ];
 
   for (const kw of ngKeywords) {
     if (name.includes(kw)) return false;
   }
 
-  // 価格が安すぎる商品（付属品の可能性が高い）を排除（2,000円未満を除外）
+  // 価格が安すぎる商品（送料別小袋や付属品の可能性）を排除（2,000円未満を除外）
   if (price < 2000) return false;
 
   return true;
 }
 
-// 長すぎる型番やSEOキーワード・重複単語を徹底除去し、綺麗な「ブランド名＋商品名」を抽出する関数
+// 長すぎる型番やSEOキーワード・重複単語を除去し、綺麗な「ブランド/銘柄名＋商品名」を抽出する関数
 function cleanProductName(name) {
   if (!name) return '';
 
-  // 1. 『』や「」で囲まれたブランド名・商品愛称があればそれを優先抽出
+  // 1. 『』や「」で囲まれた銘柄名・商品愛称があればそれを優先抽出
   const quoteMatch = name.match(/『(.*?)』|「(.*?)」/);
   if (quoteMatch) {
     const quoted = (quoteMatch[1] || quoteMatch[2]).trim();
-    if (quoted.length >= 2 && !/送料無料|ポイント|予約|限定|楽天/.test(quoted)) {
+    if (quoted.length >= 2 && !/送料無料|ポイント|予約|限定|楽天|ふるさと納税/.test(quoted)) {
       return quoted;
     }
   }
@@ -129,11 +130,11 @@ function cleanProductName(name) {
     // 【...】 [ ...] （...） (...) 内のノイズテキスト削除
     .replace(/【.*?】|\[.*?\]|（.*?）|\(.*?\)/g, ' ')
     .replace(/※.*/g, '') // ※以降の注意書き削除
-    .replace(/送料無料|ポイント\d+倍|実質\d+円|セール|在庫処分|あす楽|即納|予約|限定|メーカー直送|代引不可|着脱式|破壁機|家庭用|卓上|電気|料理|調理|簡単|便利|多機能/gi, ' ')
+    .replace(/送料無料|ポイント\d+倍|実質\d+円|セール|在庫処分|あす楽|即納|予約|限定|メーカー直送|代引不可|ふるさと納税|返礼品|お中元|お歳暮|ギフト|プレゼント|父の日|母の日|敬老の日/gi, ' ')
     .replace(/[\s\t\n]+/g, ' ')
     .trim();
 
-  // 単語の重複排除（例: 「保温プレート 保温プレート」のような重複を自動除去）
+  // 単語の重複排除
   const words = cleaned.split(' ').filter(w => w.length > 0);
   const uniqueWords = [];
   for (const w of words) {
@@ -153,7 +154,7 @@ function cleanProductName(name) {
   return name.slice(0, 18).trim();
 }
 
-// 2つの商品が同じメーカー・同一型番・同製品の別ショップ出品でないかチェックする判定関数
+// 2つの商品が同じメーカー・同一蔵元・同一製品の別ショップ出品でないかチェックする判定関数
 function areItemsTooSimilar(itemA, itemB) {
   if (!itemA || !itemB) return true;
 
@@ -170,43 +171,34 @@ function areItemsTooSimilar(itemA, itemB) {
   const cleanA = cleanProductName(nameA);
   const cleanB = cleanProductName(nameB);
 
-  // 1. クリーン名が完全一致、または一方に他方が含まれる（例: 「成城石井 ミックスナッツ」と「成城石井 ミックスナッツ 大容量」）
+  // 1. クリーン名が完全一致、または一方に他方が含まれる
   if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) return true;
 
-  // 2. 代表的なブランド・メーカー・酒造名の抽出と一致チェック
+  // 2. 代表的なお酒銘柄・蔵元・蒸留所・スイーツ・食品ブランドの一致チェック
   const brands = [
-    'アイリスオーヤマ', '山善', 'YAMAZEN', 'タイジ', 'レコルト', 'recolte',
-    'プエル', 'BRUNO', 'ブルーノ', '象印', 'ZOJIRUSHI', 'パナソニック', 'Panasonic',
-    'ライソン', 'LITHON', '岩谷', 'イワタニ', 'Iwatani', 'タイガー', 'TIGER',
-    'コイズミ', 'KOIZUMI', 'テスコム', 'TESCOM', 'ヒロコーポレーション',
-    '成城石井', 'サントリー', 'ニッカ', 'アサヒ', 'キリン', '宮城峡', '余市', '山崎', '白州', '響',
-    '手取川', '立山', '獺祭', '久保田', '八海山', '梵', '黒龍'
+    '獺祭', '久保田', '八海山', '梵', '黒龍', '十四代', '新政', '作', '手取川', '立山', '鳳凰美田', '鍋島', '磯自慢', '田酒', '寫楽', '仙禽', '醸し人九平次',
+    '山崎', '白州', '響', '余市', '宮城峡', '竹鶴', '知多', 'イチローズモルト', 'マッカラン', 'グレンフィディック', 'ボウモア', 'ラフロイグ', 'アードベッグ', 'タリスカー',
+    '森伊蔵', '魔王', '村尾', '百年の孤独', '兼八', '佐藤', '富乃宝山', '伊佐美', '赤兎馬', '中々', '吉四六',
+    'オーパスワン', 'シャトー', 'エノテカ', 'ロマネ', 'モエ', 'ヴーヴクリコ', 'ドンペリ', 'ケンゾー',
+    'ロイズ', '六花亭', 'ルタオ', 'ヨックモック', 'とらや', '成城石井', '千疋屋', 'ピエールエルメ', 'ゴディバ'
   ];
 
   for (const b of brands) {
     if (nameA.toUpperCase().includes(b.toUpperCase()) && nameB.toUpperCase().includes(b.toUpperCase())) {
-      return true; // 同じブランド・メーカー同士なら同一・類似とみなして除外
+      return true; // 同じ銘柄・ブランド同士なら同一・類似とみなして除外
     }
-  }
-
-  // 3. 型番や主要英単語の一致
-  const modelRegex = /[A-Z0-9]{3,}-[A-Z0-9]{2,}/gi;
-  const modelsA = nameA.match(modelRegex) || [];
-  const modelsB = nameB.match(modelRegex) || [];
-  for (const mA of modelsA) {
-    if (modelsB.includes(mA)) return true;
   }
 
   return false;
 }
 
 // 1. 楽天APIから2つのメイン商品情報（比較用）を取得
-// 統一ルール:
-// 【パターン1】別ジャンル卓上調理家電同士の対決（例: 卓上燻製機 vs 卓上調理ポット）
-// 【パターン2】同ジャンルで「異なるブランド」同士の対決（例: ブランドAの燻製機 vs ブランドBの燻製機）
+// ルール:
+// - 単品商品のみ（セット・飲み比べ・食べ比べは完全除外）
+// - 価格差は最大±2,000円以内（同価格帯での純粋な味わい・ペアリング対決）
 async function fetchRakutenItemPair(primaryObj) {
   const primaryKeyword = typeof primaryObj === 'object' ? primaryObj.keyword : primaryObj;
-  const category = typeof primaryObj === 'object' ? primaryObj.category : 'appliance';
+  const category = typeof primaryObj === 'object' ? primaryObj.category : 'liquor';
 
   const appId = process.env.RAKUTEN_APPLICATION_ID;
   const affId = process.env.RAKUTEN_AFFILIATE_ID;
@@ -237,44 +229,65 @@ async function fetchRakutenItemPair(primaryObj) {
   let itemA = null;
   let itemB = null;
 
-  console.log(`[比較対決モード] 同カテゴリ・異ブランド比較モード (検索キーワード: ${primaryKeyword}, カテゴリ: ${category})`);
-  // 1度でも投稿されたJANコード・itemCode・URL・商品名のアイテムを排除
+  console.log(`[比較対決モード] 同カテゴリ・同価格帯（価格差±2,000円以内）比較モード (検索キーワード: ${primaryKeyword}, カテゴリ: ${category})`);
   const rawItems = await searchRakuten(primaryKeyword);
   const items = rawItems.filter(i => {
     i.Item.cleanName = cleanProductName(i.Item.itemName);
     return !isItemAlreadyPosted(i.Item, postedList);
   });
 
+  // 価格差最大±2,000円以内のペアを探す
   if (items.length >= 2) {
     const shuffle = items.sort(() => 0.5 - Math.random());
-    itemA = shuffle[0].Item;
-
-    // 異なるブランド・メーカーの候補を探す
-    for (let i = 1; i < shuffle.length; i++) {
-      const candidate = shuffle[i].Item;
-      if (!areItemsTooSimilar(itemA, candidate)) {
-        itemB = candidate;
-        break;
+    for (let i = 0; i < shuffle.length; i++) {
+      const candidateA = shuffle[i].Item;
+      for (let j = i + 1; j < shuffle.length; j++) {
+        const candidateB = shuffle[j].Item;
+        const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
+        if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
+          itemA = candidateA;
+          itemB = candidateB;
+          break;
+        }
       }
+      if (itemA && itemB) break;
     }
-    if (!itemB) itemB = shuffle[1].Item;
-  } else {
-    // 件数が足りない場合、同じカテゴリ内のキーワードから補填（異カテゴリ混入を防止）
-    console.log(`[補填モード] キーワード「${primaryKeyword}」の未投稿商品が不足のため、同カテゴリ内から代替検索`);
+  }
+
+  // 同一キーワード内で価格差±2,000円ペアが見つからない場合、同カテゴリ内キーワードから補填
+  if (!itemA || !itemB) {
+    console.log(`[補填モード] キーワード「${primaryKeyword}」で価格差±2,000円以内のペアが不足のため、同カテゴリ内から代替検索`);
     let sameCategoryPool = [];
-    if (category === 'liquor') sameCategoryPool = [...SAKE_KEYWORDS, ...WHISKY_KEYWORDS, ...WINE_KEYWORDS];
-    else if (category === 'snack') sameCategoryPool = [...SWEET_SNACK_KEYWORDS, ...SAVORY_SNACK_KEYWORDS];
-    else sameCategoryPool = TABLETOP_APPLIANCE_KEYWORDS;
+    if (category === 'liquor') sameCategoryPool = [...SAKE_KEYWORDS, ...WHISKY_KEYWORDS, ...SHOCHU_KEYWORDS, ...WINE_KEYWORDS];
+    else sameCategoryPool = [...SWEETS_KEYWORDS, ...SNACK_KEYWORDS];
 
-    const altKw = sameCategoryPool.filter(k => k !== primaryKeyword)[Math.floor(Math.random() * sameCategoryPool.length)] || primaryKeyword;
-    const rawA = await searchRakuten(primaryKeyword);
-    const rawB = await searchRakuten(altKw);
-    const itemsA = rawA.map(i => (i.Item.cleanName = cleanProductName(i.Item.itemName), i)).filter(i => !isItemAlreadyPosted(i.Item, postedList));
-    const itemsB = rawB.map(i => (i.Item.cleanName = cleanProductName(i.Item.itemName), i)).filter(i => !isItemAlreadyPosted(i.Item, postedList));
+    const altPool = sameCategoryPool.filter(k => k !== primaryKeyword);
+    const combinedCandidates = [...items.map(i => i.Item)];
 
-    if (itemsA.length > 0 && itemsB.length > 0) {
-      itemA = itemsA[0].Item;
-      itemB = itemsB[0].Item;
+    for (const altKw of altPool.slice(0, 3)) {
+      const rawAlt = await searchRakuten(altKw);
+      const filteredAlt = rawAlt.map(i => {
+        i.Item.cleanName = cleanProductName(i.Item.itemName);
+        return i.Item;
+      }).filter(item => !isItemAlreadyPosted(item, postedList));
+      combinedCandidates.push(...filteredAlt);
+    }
+
+    if (combinedCandidates.length >= 2) {
+      const shuffleComb = combinedCandidates.sort(() => 0.5 - Math.random());
+      for (let i = 0; i < shuffleComb.length; i++) {
+        const candidateA = shuffleComb[i];
+        for (let j = i + 1; j < shuffleComb.length; j++) {
+          const candidateB = shuffleComb[j];
+          const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
+          if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
+            itemA = candidateA;
+            itemB = candidateB;
+            break;
+          }
+        }
+        if (itemA && itemB) break;
+      }
     }
   }
 
@@ -284,7 +297,8 @@ async function fetchRakutenItemPair(primaryObj) {
   savePostedItem(itemA);
   savePostedItem(itemB);
 
-  console.log(`[比較対決設定確定] [カテゴリ:${category}] 商品A: ${cleanProductName(itemA.itemName)} VS 商品B: ${cleanProductName(itemB.itemName)}`);
+  const finalDiff = Math.abs(itemA.itemPrice - itemB.itemPrice);
+  console.log(`[比較対決設定確定] [カテゴリ:${category}] 商品A: ${cleanProductName(itemA.itemName)} (${itemA.itemPrice}円) VS 商品B: ${cleanProductName(itemB.itemName)} (${itemB.itemPrice}円) [価格差: ${finalDiff}円]`);
 
   return {
     category,
@@ -305,7 +319,7 @@ async function fetchRakutenItemPair(primaryObj) {
   };
 }
 
-// 投稿済みキーワードの記録・読み込み（「焼き鳥」「焼肉」などの連打を防止）
+// 投稿済みキーワードの記録・読み込み（連打を防止）
 function getUsedKeywords() {
   const filePath = './used_keywords.json';
   if (fs.existsSync(filePath)) {
@@ -325,92 +339,78 @@ function saveUsedKeyword(keyword) {
   fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
 }
 
-// 実用的で一人飲み・家飲みに活躍する卓上調理家電キーワード群（約33.3%）
-const TABLETOP_APPLIANCE_KEYWORDS = [
-  '卓上たこ焼き器',
-  '卓上流しそうめん器',
-  '卓上おでん鍋',
-  '卓上焼き鳥焼き器',
-  '卓上電気酒燗器',
-  '卓上電気せいろ',
-  '卓上串揚げ器',
-  '卓上保温プレート',
-  '卓上燻製器',
-  '卓上チーズヒーター',
-  '卓上フォンデュ鍋',
-  '卓上卓上一人鍋',
-  '卓上電気グリル鍋',
-  '卓上ホットサンドメーカー',
-  '卓上ワッフルメーカー',
-  '卓上フィッシュロースター',
-  '卓上コンパクトホットプレート',
-  '卓上クレープメーカー',
-  '卓上燻製スモーカー',
-  '卓上ミニロースター'
-];
-
-// ふるさと納税・おつまみお菓子キーワード群（甘いもの同士、塩っぽいもの同士）（約33.3%）
-const SWEET_SNACK_KEYWORDS = [
-  'ふるさと納税 チョコレート',
-  'ふるさと納税 ケーキ 焼菓子',
-  'ふるさと納税 プリン スイーツ',
-  'ふるさと納税 クッキー',
-  'ふるさと納税 カステラ',
-  'ふるさと納税 和菓子 干し柿'
-];
-
-const SAVORY_SNACK_KEYWORDS = [
-  'ふるさと納税 お煎餅 せんべい',
-  'ふるさと納税 ナッツ おつまみ',
-  'ふるさと納税 ポテトチップス お菓子',
-  'ふるさと納税 柿の種 つまみ',
-  'ふるさと納税 チーズ おつまみ',
-  'ふるさと納税 ドライフルーツ ナッツ'
-];
-
-// 本格お酒銘柄比較用キーワード群（日本酒・ウイスキー・ワイン等の銘柄同士対決）（約33.3%）
+// === 厳選ターゲット1: 単品本格酒銘柄（日本酒・ウイスキー・焼酎・ワイン等） ===
 const SAKE_KEYWORDS = [
-  '日本酒 720ml 純米大吟醸 銘柄',
-  '日本酒 吟醸 飲み比べ 銘柄',
-  '日本酒 特別純米 銘柄'
+  '日本酒 純米大吟醸 720ml 瓶 単品',
+  '日本酒 純米吟醸 辛口 720ml 単品',
+  '日本酒 特別純米 地酒 720ml 単品',
+  '日本酒 原酒 720ml 単品'
 ];
 
 const WHISKY_KEYWORDS = [
-  'ウイスキー シングルモルト 銘柄 700ml',
-  'スコッチウイスキー 銘柄',
-  'ジャパニーズウイスキー 銘柄'
+  'ウイスキー シングルモルト 700ml 単品',
+  'ジャパニーズウイスキー ボトル 単品 700ml',
+  'スコッチウイスキー シングルモルト 700ml 単品',
+  'バーボンウイスキー 700ml 単品'
+];
+
+const SHOCHU_KEYWORDS = [
+  '本格焼酎 芋焼酎 瓶 単品 720ml',
+  '本格焼酎 麦焼酎 瓶 単品 720ml',
+  'プレミアム焼酎 720ml 単品'
 ];
 
 const WINE_KEYWORDS = [
-  '赤ワイン フルボディ 銘柄',
-  '白ワイン 辛口 銘柄',
-  'スパークリングワイン 銘柄'
+  '赤ワイン フルボディ 750ml 単品',
+  '白ワイン 辛口 750ml 単品',
+  'スパークリングワイン 辛口 750ml 単品'
+];
+
+// === 厳選ターゲット2: ふるさと納税 単品おつまみ・スイーツ ===
+const SWEETS_KEYWORDS = [
+  'ふるさと納税 チョコレート スイーツ 単品',
+  'ふるさと納税 ケーキ 焼菓子 単品',
+  'ふるさと納税 プリン 濃厚 スイーツ',
+  'ふるさと納税 クッキー 焼菓子',
+  'ふるさと納税 カステラ 本格',
+  'ふるさと納税 和菓子 あんぽ柿'
+];
+
+const SNACK_KEYWORDS = [
+  'ふるさと納税 ミックスナッツ おつまみ 素焼き',
+  'ふるさと納税 チーズ おつまみ 熟成',
+  'ふるさと納税 お煎餅 せんべい 職人 手焼き',
+  'ふるさと納税 柿の種 つまみ',
+  'ふるさと納税 燻製 スモーク おつまみ 単品',
+  'ふるさと納税 干物 珍味 おつまみ'
 ];
 
 function selectRandomKeyword(excludeList = []) {
   const usedKeywords = getUsedKeywords();
   
-  // 家電 33%、ふるさと納税お菓子 33%、お酒銘柄 33% の均等確率
+  // お酒（50%） vs ふるさと納税おつまみ・スイーツ（50%）
   const rand = Math.random();
   
   let keywordPool = [];
-  let category = 'appliance';
+  let category = 'liquor';
 
-  if (rand < 0.33) {
-    // 卓上調理家電（33%）
-    keywordPool = TABLETOP_APPLIANCE_KEYWORDS;
-    category = 'appliance';
-  } else if (rand < 0.66) {
-    // ふるさと納税お菓子（33%）：甘いもの同士50% / 塩っぽいもの同士50%
-    keywordPool = Math.random() < 0.5 ? SWEET_SNACK_KEYWORDS : SAVORY_SNACK_KEYWORDS;
-    category = 'snack';
-  } else {
-    // 本格お酒銘柄（34%）：日本酒、ウイスキー、ワインから選出
-    const liquorRand = Math.random();
-    if (liquorRand < 0.34) keywordPool = SAKE_KEYWORDS;
-    else if (liquorRand < 0.67) keywordPool = WHISKY_KEYWORDS;
-    else keywordPool = WINE_KEYWORDS;
+  if (rand < 0.50) {
+    // 本格お酒銘柄（日本酒・ウイスキー・焼酎・ワイン）
     category = 'liquor';
+    const liquorTypeRand = Math.random();
+    if (liquorTypeRand < 0.35) {
+      keywordPool = SAKE_KEYWORDS;
+    } else if (liquorTypeRand < 0.65) {
+      keywordPool = WHISKY_KEYWORDS;
+    } else if (liquorTypeRand < 0.85) {
+      keywordPool = SHOCHU_KEYWORDS;
+    } else {
+      keywordPool = WINE_KEYWORDS;
+    }
+  } else {
+    // ふるさと納税（スイーツ or おつまみ）
+    category = 'furusato';
+    keywordPool = Math.random() < 0.5 ? SWEETS_KEYWORDS : SNACK_KEYWORDS;
   }
 
   const available = keywordPool.filter(k => !usedKeywords.includes(k) && !excludeList.includes(k));
@@ -435,200 +435,118 @@ async function generateArticlePair(itemPair) {
   const nameB = itemPair.itemB.cleanName || fullNameB.slice(0, 18);
 
   const priceDiff = Math.abs(itemPair.itemA.price - itemPair.itemB.price).toLocaleString();
-
-  const category = itemPair.category || 'appliance';
-  let pattern = {};
-
-  if (category === 'liquor') {
-    // 【お酒銘柄専用パターン群】味・香り・口当たり・余韻・おつまみとの相性にトコトンフォーカス！
-    const PATTERNS_LIQUOR = [
-      {
-        titleTemplate: `【本音で飲み比べ迷い】『${nameA}』と『${nameB}』、次に開拓するならどっち？`,
-        introIdea: `最近お酒を色々と飲み比べてみたいなーって思ってるんですよね。\n\nじっくり味わえる本格的なお酒を開拓したくて。\n\nでも美味しそうな銘柄が多すぎてどれから手をつけるべきか選べない...`,
-        h2_a: `## 芳醇な香りと洗練された味わいの『${nameA}』`,
-        h2_b: `## 独特のコクと口当たりの良さが光る『${nameB}』`,
-        h2_diff: `## 価格差は約${priceDiff}円。この味と品質の差をどう考える？`,
-        h2_eval: `## 呑んだ時の風味と後味（余韻）の違いを比べる`,
-        h2_scene: `## どんなおつまみやシーンで呑むのが一番引き立つか`,
-        h2_care: `## 保存方法や飲み頃（ロック・冷酒・ぬる燗など）の選びやすさ`,
-        summaryHeadline: `## 結論：「どんな味わいの余韻を楽しみたいか」で選ぶのが一番納得できそう`
-      },
-      {
-        titleTemplate: `晩酌でじっくり味わうなら『${nameA}』と『${nameB}』どっちの銘柄が幸せになれる？`,
-        introIdea: `夜のゆっくりした時間に、グラスに注いで本気で味わいたいお酒を探して調べ直していました。\n\n気になった銘柄を2つまで絞り込んだものの、どっちも魅力的すぎて決められません。`,
-        h2_a: `## スッキリとしたキレと上品な口当たりが魅力の『${nameA}』`,
-        h2_b: `## 濃厚な旨味としっかりした呑みごたえが広がる『${nameB}』`,
-        h2_diff: `## 約${priceDiff}円の差。普段の晩酌用か、ちょっと特別な日のためか`,
-        h2_eval: `## 呑みやすさと香りの広がり方を比較してみる`,
-        h2_scene: `## 毎日の晩酌タイムでダラダラ呑むのに合っているのは`,
-        h2_care: `## 開封後の味の変化や保存のしやすさ`,
-        summaryHeadline: `## 結局「自分の好きな風味のタイプ」に合わせて選ぶのが失敗しない`
-      },
-      {
-        titleTemplate: `【銘柄対決】『${nameA}』VS『${nameB}』、呑み比べで先に試したいのはどっち？`,
-        introIdea: `銘柄によって香りも旨味も全然違うから、お酒の世界って本当に奥が深くて楽しいですよね。\n\n今回は特に評価が高くて気になった2銘柄を真剣に比較中。`,
-        h2_a: `## 華やかな香りが引き立つ、王道バランスの『${nameA}』`,
-        h2_b: `## 個性的な風味と深い味わいがクセになる『${nameB}』`,
-        h2_diff: `## 約${priceDiff}円の価格差。この銘柄ならではの価値を考える`,
-        h2_eval: `## 口に含んだ瞬間の旨味と、喉越しのキレを比べる`,
-        h2_scene: `## お刺身や肉料理など、合わせたい料理との相性`,
-        h2_care: `## 飲み方のバリエーション（ロック・ストレート・割るなど）の豊富さ`,
-        summaryHeadline: `## どちらも間違いなく旨いからこそ、自分の「今の気分」で決めるのが正解`
-      }
-    ];
-    pattern = PATTERNS_LIQUOR[Math.floor(Math.random() * PATTERNS_LIQUOR.length)];
-  } else if (category === 'snack') {
-    // 【ふるさと納税お菓子専用パターン群】食感・甘み・塩気・満足感にフォーカス！
-    const PATTERNS_SNACK = [
-      {
-        titleTemplate: `【ふるさと納税】家飲みのお供に『${nameA}』と『${nameB}』どっちのお菓子を選ぶ？`,
-        introIdea: `お酒を飲む時って、美味しいおつまみやお菓子が欲しくなりますよね。\n\nコンビニで買うと結構高いし...と思ったら、楽天のふるさと納税なら実質罪悪感ゼロで買えちゃうことに気づいて！\n\nでも美味しそうなものが多すぎてどれにするか選べない...`,
-        h2_a: `## 止まらない美味しさと素材の良さが際立つ『${nameA}』`,
-        h2_b: `## 濃厚な味わいで酒乗りが抜群の『${nameB}』`,
-        h2_diff: `## 寄付金額（または価格）の差。お得感と内容量で比較`,
-        h2_eval: `## 食べた時の食感・甘み・塩気のバランスを比べる`,
-        h2_scene: `## ウイスキーやハイボール、ビールと合わせた時の満足感`,
-        h2_care: `## 個包装か大袋か、保存のしやすさと賞味期限`,
-        summaryHeadline: `## 呑むお酒の種類や「普段どんなおつまみを欲するか」で選ぶのが一番`
-      },
-      {
-        titleTemplate: `お酒が進む絶品お菓子対決！『${nameA}』と『${nameB}』で迷った結果...`,
-        introIdea: `せっかく家で美味しく飲むなら、最高のおつまみ・お菓子を準備したいですよね。\n\nふるさと納税の返礼品で大人気の2つを見つけて、真剣に悩んでいます。`,
-        h2_a: `## 一口食べるだけで満足度が高い、贅沢な『${nameA}』`,
-        h2_b: `## ついつい手が伸びる香ばしさがたまらない『${nameB}』`,
-        h2_diff: `## 約${priceDiff}円の価格差。量とクオリティのバランス`,
-        h2_eval: `## 実際の味わいの濃さや食感の満足度を比較`,
-        h2_scene: `## 夜のお酒タイムに少しずつつまむのに最適なのは`,
-        h2_care: `## 届いた時の量と保管スペースのリアル`,
-        summaryHeadline: `## 自分の好みの味わい（甘さ系か塩気系か）に合わせて選ぶと失敗しない`
-      }
-    ];
-    pattern = PATTERNS_SNACK[Math.floor(Math.random() * PATTERNS_SNACK.length)];
-  } else {
-    // 【卓上調理家電専用パターン群】機能性・お手入れ・焼き上がり・居酒屋感にフォーカス！
-    const PATTERNS_APPLIANCE = [
-      {
-        titleTemplate: `一人家飲みの相棒にするなら『${nameA}』と『${nameB}』どっちが快適？`,
-        introIdea: `家での晩酌をちょっと楽しくするアイテムを探していて、卓上調理家電を色々調べていました。\n\n面白そうで便利そうな一人家飲み用のアイテムを見つけて、真剣に買おうか悩んでいます。`,
-        h2_a: `## 卓上で手軽にアツアツが楽しめる『${nameA}』`,
-        h2_b: `## 目の前で育てる焼き上がりのライブ感がたまらない『${nameB}』`,
-        h2_diff: `## 約${priceDiff}円の価格差。手軽さと機能性の天秤`,
-        h2_eval: `## 調理スピードや焼き上がりの香ばしさを比較`,
-        h2_scene: `## 卓上に置いた時のサイズ感と一人飲みの収まりやすさ`,
-        h2_care: `## プレートの取り外しや洗やすさ、煙・油跳ねのお手入れ`,
-        summaryHeadline: `## 自分が「卓上でどんな家飲み風景を楽しみたいか」で選ぶのが一番`
-      },
-      {
-        titleTemplate: `【卓上家電本音比較】『${nameA}』VS『${nameB}』、おうち居酒屋を開くなら？`,
-        introIdea: `外飲みを減らして家でまったり飲む時間が増えたので、卓上家電を新調したくなりました。\n\n気になった2台を詳しく調べてみたものの、どっちも良さがあって決められません。`,
-        h2_a: `## 多機能でいろんなおつまみに対応できる『${nameA}』`,
-        h2_b: `## シンプルゆえに旨味を最大限に引き出す『${nameB}』`,
-        h2_diff: `## 価格差は約${priceDiff}円。この差額をどう考える？`,
-        h2_eval: `## 卓上での使いやすさと仕上がりのクオリティ`,
-        h2_scene: `## 普段のおつまみ準備のラクさと楽しさ`,
-        h2_care: `## 使った後の片付けの手間と収納のしやすさ`,
-        summaryHeadline: `## 「使い勝手のラクさ」か「居酒屋感の雰囲気」かで選ぶのが正解`
-      }
-    ];
-    pattern = PATTERNS_APPLIANCE[Math.floor(Math.random() * PATTERNS_APPLIANCE.length)];
-  }
+  const category = itemPair.category || 'liquor';
 
   const prompt = `
-以下の【プロフィール設定】と【2つの比較対象商品情報】を基に、Amebaブログ用の本音比較ブログ記事を作成してください。
-アフィリエイト感を絶対に排除し、夜中に一人でお酒やお茶を飲みながら「自分が本気でどちらを買うか真剣に悩んでいる」という個人の独白スタンスで書いてください。
-絶対に商品をアピールしたり売り込もうとせず、あくまで「どっちも魅力的で選べない...」という目線で客観的に悩んでください。
+以下の【プロフィール設定】と【比較する2つの商品情報】を基に、Amebaブログ用の「本気で迷っている個人ブログ記事」を作成してください。
 
-【プロフィール設定】:
+==================================================
+【プロフィール設定】
 ${profileContent}
 
-【商品A情報】:
+【商品A情報】
 - 正式商品名: ${fullNameA}
 - 略称・通称: ${nameA}
-- 価格: ${priceA}円
+- 価格/寄付金額: ${priceA}円
 
-【商品B情報】:
+【商品B情報】
 - 正式商品名: ${fullNameB}
 - 略称・通称: ${nameB}
-- 価格: ${priceB}円
+- 価格/寄付金額: ${priceB}円
+- 価格差: 約${priceDiff}円（※価格差は最大でも2,000円以内のほぼ同価格帯です）
+- カテゴリ: ${category === 'liquor' ? '本格お酒（日本酒・ウイスキー・焼酎・ワイン等）' : 'ふるさと納税（おつまみ・スイーツ）'}
+==================================================
+
+【最重要！記事のスタンスと方向性（商品比較記事30% / 晩酌好きのリアルな独白迷いブログ70%）】
+
+あなたはいちお酒好き・晩酌好きの個人ブロガーです。
+「おすすめはこちら！」「比較まとめました！」といったアフィリエイト臭全開の量産記事は絶対に作らないでください。
+「夜中に一人でお酒を飲みながら、次に買う1本（ふるさと納税の1品）を真剣に迷っている」というリアルな個人の語り口で書いてください。
 
 --------------------------------------------------
-【絶対に守るべきMarkdown構成＆スタンスルール】:
+【絶対に守るべき必須要素（残すべき芯と追加要素）】
 
-1. **商品名（略称）の記述ルール**:
-   - 本文や見出しで商品名を記載するときは、必ず短く整えられた略称『${nameA}』および『${nameB}』だけを使用してください。
-   - 重複した単語（例：「お煎餅 お煎餅」「日本酒 日本酒」など）は不自然なので絶対に書かないでください！
+1. **冒頭の個人ブログ感・等身大の導入**:
+   - いきなり商品紹介から始めないこと。
+   - 例：「最近お酒を色々と飲み比べてみたいなーって思ってるんですよね。」「夜に一人で飲むときって、ちょっといいおつまみがあるとテンション上がりますよね。」といった、日常の晩酌の一コマや個人の探求から始める。
+   - 「でも美味しそうなものが多すぎてどれから手をつけるべきか選べない...」と共感を誘う立ち位置を取る。
 
-2. **タイトル**:
-   - 必ず以下の指定タイトルテンプレートをそのまま出力してください。
-   - タイトル: 「${pattern.titleTemplate}」
+2. **「なぜこの2つで迷っているのか」の個人的動機**:
+   - 記事ごとに独自の自然な理由を入れてください（例：「最近辛口の日本酒が気になってる」「スモーキーなウイスキーを開拓したかった」「ずっと名前を見かけて気になっていた」「ハイボールに合うちょっと贅沢なナッツを探していた」など）。
 
-3. **文章スタンス・語り口・改行**:
-   - **基本スタンス**: すべての記事において「自分で気になった商品を詳しく調べてはみたけど、どっちにするか決められないなー、どっちを次に買ってみようかなーと悩んでる」という個人ブログのリアルな空気感を徹底してください。
-   - **アピール・押し売り禁止**: 「おすすめです！」「買いましょう！」などの言葉は絶対に使用禁止。売ろうとせず、純粋に迷ってください。
-   - **CRITICAL（カテゴリ特化）**:
-     ${category === 'liquor' ? `
-     - 今回の比較対象は【本格的なお酒（日本酒・ウイスキー・ワイン等）】です！
-     - 卓上家電の言葉（「卓上で焼く」「調理」「洗物」「プレート」等）は絶対に1文字も使わないでください！
-     - **味・風味・香り・キレ・口当たり・後味（余韻）・呑み心地・おつまみ（刺身や肉など）との相性**にトコトンフォーカスして文章を書いてください！
-     - 導入は「最近お酒を色々と飲み比べてみたいなーって思ってるんですよね。じっくり味わえる本格的なお酒を開拓したくて。でも美味しそうな銘柄が多すぎてどれから手をつけるべきか選べない...」という空気感を全開にしてください。
-     ` : category === 'snack' ? `
-     - 今回の比較対象は【ふるさと納税のおつまみ・お菓子】です！
-     - 味・食感・甘み・塩気・お酒（ハイボールやビール）との相性にトコトンフォーカスしてください！
-     - 導入は「ハイボール（やビール）を飲む時って、チョコやお煎餅のおつまみが欲しくなる。でもコンビニだと高いし...と思ったら楽天のふるさと納税で注文できると知って罪悪感ゼロで買えそう！でも美味しそうなものが多すぎてどちらにするか選べない...」という空気感を全開にしてください。
-     ` : `
-     - 今回の比較対象は【一人飲み用の卓上調理家電】です！
-     - 卓上での使い勝手・焼き上がりの美味しさ・居酒屋感・片付けのお手入れにフォーカスしてください！
-     - 導入は「面白そうで便利そうな一人家飲み用（卓上用）のアイテムを見つけて、真剣に買おうか悩んでいる」という空気感を出してください。
-     `}
-   - 句点「。」や独白の区切りごとに【必ず空行を1行挟んで改行】してください。
-   - 心の声（例: **「え、これどっち買えばいいんだ？」**）や金額の差（例: **約${priceDiff}円**）は **太文字** にする。
+3. **自分の普段の好み（書き手の立ち位置）を明記**:
+   - 「普段はスッキリ辛口派」「甘いお酒よりキレ重視」「夜はウイスキーをちびちび飲むのが好き」「甘いものより塩気のあるおつまみ派」など、読者があなたの判断基準を理解できる好みを自然に盛り込む。
 
-4. **指定の見出し構成（h1 / # は本文中で使用禁止。綺麗な構成を維持）**:
-   - 導入（${pattern.introIdea} の空気感・悩みスタンスで始める）
-   - \`---\`
-   - \`${pattern.h2_a}\` （※冒頭で1回だけ正式商品名『${fullNameA}』と価格${priceA}円を明記）
-   - \`---\`
-   - \`${pattern.h2_b}\` （※冒頭で1回だけ正式商品名『${fullNameB}』と価格${priceB}円を明記）
-   - \`---\`
-   - \`${pattern.h2_eval}\`
-   - \`---\`
-   - \`${pattern.h2_diff}\`
-   - \`---\`
-   - \`${pattern.h2_scene}\`
-   - \`---\`
-   - \`${pattern.h2_care}\`
-   - \`---\`
-   - \`## 正直、どっちに惹かれてる？\`
-     - \`### ${nameA}に惹かれる理由\`
-     - \`### ${nameB}に惹かれる理由\`
-   - \`---\`
-   - \`${pattern.summaryHeadline}\`
-   - \`---\`
-   - \`## まとめ\`
-     - 文末の締めとして、**必ず以下の文言をそのまま入れて締めくくってください**:
-       「どっちも良い点が多いから難しいなーもう少し考えてみるかな。一応今回悩んでた商品貼っておきます。皆ならどっち買う？」
+4. **テーマの一発提示**:
+   - **「え、これどっち買えばいいんだ？」** と本気で悩んでいることを読者に伝える。
+   - 2商品だけを真剣に比較する（セットや10選などにはせず、この単品2つに絞ってリアルに悩む）。
+
+5. **価格差（約${priceDiff}円）についての自然な捉え方**:
+   - 価格差は約${priceDiff}円とほぼ同価格帯です。
+   - **「高いから悩む」「安いからこっちにする」という損得の比較は絶対にしないでください**。
+   - 「価格差はたった約${priceDiff}円だから、もう値段の損得じゃなくて、純粋に味の好みやペアリング、その日の気分で決められるのが逆に悩ましい」というスタンスで語ってください。
+
+6. **相性やシーン・ペアリングでの比較軸**:
+   - ${category === 'liquor' 
+     ? '料理とのペアリング（刺身、肉料理、チーズ等）や、お酒の種類に合った自然な飲み方（日本酒なら冷酒/常温/燗、ウイスキーならストレート/ロック/ハイボール、焼酎なら水割り/お湯割り/ソーダ割り等）にフォーカスする。'
+     : '普段飲んでいるお酒（ビール、ハイボール、ワイン等）とのペアリングや、夜の晩酌で少しずつつまむシーン、食感や味わいの濃さにフォーカスする。'}
+
+7. **「正直、どっちに惹かれてる？」という見出しと本音**:
+   - 商品スペックではなく、書き手の感情が入った見出しを立てる。
+   - 「今のところ自分なら7:3で${nameA}寄り（または${nameB}寄り）」「でも週末になったら${nameB}をポチってそうな気もする」といった、リアルな本音の傾きを入れる。
+
+8. **「結局まだ迷っている」自然な終わり方とコメントしやすい質問**:
+   - 無理に「結論！おすすめはコレ！」と売り込まない。「どっちも良さそうだから、もう少し悩んでみる」というスタンスで終える。
+   - 読者への問いかけは、単に「皆ならどっち？」だけでなく、「辛口派？旨味派？」「${nameA}を飲んだ（食べた）ことある人います？」「ハイボールに合わせるならどっち派？」など、コメントしやすい具体的な質問を添えて締めくくる。
 
 --------------------------------------------------
-【SEO / AI-SEO / GEO（生成AI検索最適化）徹底重視の執筆ガイドライン】:
+【絶対に排除・修正すべき禁止事項（AI臭さの完全排除）】
 
-1. **検索キーワードの自然な自然含有（SEO強化）**:
-   - 比較する商品名『${nameA}』と『${nameB}』、およびそのジャンル（${category === 'liquor' ? '銘柄・味わい・飲み比べ' : category === 'snack' ? 'ふるさと納税・おつまみ・還元率' : '卓上家電・お手入れ・一人飲み'}）を本文中に自然に盛り込んでください。
-   - 「どっちがおすすめ？」「違いは？」「比較」「口コミ」「メリット・デメリット」「価格差」といったユーザーが実際に検索エンジンやAIチャットで調べる自然な問いかけを独白内で自然に使用してください。
-
-2. **AI検索（ChatGPT / Perplexity / Gemini）に引用されやすいGEO構造（信頼性・回答性）**:
-   - 抽象的で一般的な説明ではなく、**具体的数値（価格差 約${priceDiff}円など）、具体的な使用シーン、味や機能の具体的な違い**を明記してください。
-   - 「なぜ迷うのか」の対比理由を論理的かつ情熱的に記述し、AI検索エンジンが「この記事は両者の違いを的確に比較している高品質な一次情報」と判断できるように執筆してください。
-
-3. **自然でAI臭さゼロの体験価値（E-E-A-T評価）**:
-   - 定型的な商品カタログスペックの羅列は絶対に禁止。
-   - 実際に生活に取り入れた時の「手軽さ」「満足感」「失敗したくない心理」をリアルなブロガーの言葉で表現してください。
+- ❌ **未購入なのに実際に飲んだ/食べたように書く表現の禁止**:
+  - 「口に含んだ瞬間に広がる」「一口食べたときの満足感」などの嘘の体験談はNG！
+  - まだ飲んでいない・食べていない前提なので、「商品説明を見る限り〜らしい」「レビューを読んでいると『〇〇』という声が多くて気になってます」のように情報源を自然かつ正直に表現すること。
+- ❌ **セット・飲み比べ・食べ比べ商品の言及禁止**:
+  - あくまで「1本のボトル」「1つの返礼品」としての単品比較です。
+- ❌ **同語反復や定型フレーズの禁止**:
+  - 「口コミや評判を見ても評判が良い」といった同語反復は禁止。
+  - 「銘柄によって香りも旨味も全然違うから、お酒の世界って本当に奥が深くて楽しいですよね。」のような紋切型のAI構文を使い回さないこと。
+- ❌ **「〜そうだなと思っています」「〜ですよね」の連発禁止**。
+- ❌ **「悩ましい」の連打禁止**（冒頭と最後だけで十分）。
+- ❌ **「どちらも間違いなく旨い」の言い切り禁止**（飲んでいないので「どちらも評判が高くて気になる」等にする）。
+- ❌ **硬い説明文の禁止**（「キレを重視するか、味わいの深さを重視するかで〜」のような解説調は避け、「スッキリ飲みたい日はこっち、じっくり味わいたい日はこっちかな」のようにブログ調で書く）。
+- ❌ **卓上家電の用語（プレート、焼き上がり、煙、お手入れ等）は一切使わないこと！**
 
 --------------------------------------------------
-以下のJSON形式のみで出力してください（Markdown表記の文字列としてcontentHtmlを出力）：
+【Markdown見出し構成ルール】
+- 記事タイトルは魅力的でブログらしいものにすること（例: 『${nameA}』と『${nameB}』、次に晩酌で開拓するならどっち？ / 【本気で迷い中】『${nameA}』VS『${nameB}』... 等）
+- h1（#）は本文中で使用禁止。h2（##）およびh3（###）を使用すること。
+- 句点「。」や独白の区切りごとに空行を1行挟んで、スマホで読みやすい適度な改行を入れること。
+- 心の声などは **太文字** を適度に使用すること。
+- 構成案（各セクションの間は \`---\` で区切る）：
+  - 導入（晩酌の日常・悩み・なぜこの2つなのか・普段の好み）
+  - \`---\`
+  - \`## 『${nameA}』が気になっている理由\`（※冒頭で1回だけ正式商品名『${fullNameA}』と価格${priceA}円を明記し、スペックやレビューの気になる点を語る）
+  - \`---\`
+  - \`## もう一つの候補『${nameB}』の魅力\`（※冒頭で1回だけ正式商品名『${fullNameB}』と価格${priceB}円を明記し、特徴を語る）
+  - \`---\`
+  - \`## 価格差は約${priceDiff}円。値段がほぼ同じだからこそ純粋に悩む\`（同価格帯だからこそ味や特徴で迷うスタンス）
+  - \`---\`
+  - \`## 合わせたい料理やお酒、晩酌シーンで比べてみる\`（ペアリングや飲む場面での対比）
+  - \`---\`
+  - \`## 正直、どっちに惹かれてる？\`
+    - \`### ${nameA}に惹かれる理由\`
+    - \`### ${nameB}に惹かれる理由\`
+    - （「今のところ7:3で〇〇寄りだけど…」という本音）
+  - \`---\`
+  - \`## まとめ：もう少し迷ってみる\`
+    - （どっちも魅力的だからもう少し考える＋商品リンクへの誘導＋コメントしやすい質問）
+
+--------------------------------------------------
+出力は必ず以下の有効なJSON形式のみとしてください：
 {
-  "title": "${pattern.titleTemplate}",
-  "contentHtml": "（指定された導入・見出し構成に沿ったMarkdown文章）",
-  "tags": ["${category === 'liquor' ? '日本酒' : category === 'snack' ? 'ふるさと納税' : '卓上家電'}", "家飲み", "本音比較", "飲み比べ"]
+  "title": "記事タイトル文字列",
+  "contentHtml": "（Markdown形式の本文文字列）",
+  "tags": ["${category === 'liquor' ? '日本酒' : 'ふるさと納税'}", "晩酌", "家飲み", "本音比較"]
 }
 `;
 
@@ -668,7 +586,7 @@ ${profileContent}
         console.log(`[Groq API] モデル ${m.name} を試行中...`);
         const chatCompletion = await groq.chat.completions.create({
           messages: [
-            { role: 'system', content: 'あなたはAmebaブログの人気ブロガーです。要求されたJSON形式のみで回答してください。' },
+            { role: 'system', content: 'あなたはAmebaブログで人気の晩酌・お酒好きブロガーです。要求されたJSON形式のみで回答してください。' },
             { role: 'user', content: prompt }
           ],
           model: m.id,
@@ -687,28 +605,62 @@ ${profileContent}
 
   // --- C. フォールバック記事生成 ---
   console.log('AI API不可のため、比較フォールバック記事を生成します。');
-  const title = `【比較】${nameA} VS ${nameB} どっちが買い？`;
+  const title = `『${nameA}』と『${nameB}』、次の晩酌で選ぶならどっち？`;
 
-  const contentHtml = `
-<p>家で美味しいおつまみを楽しみながら飲む時間って最高ですよね。<br><br>でも、「どの卓上アイテムを選べば後悔しないんだろう……」と悩むことってありませんか？</p>
+  const rawFallback = `
+最近、夜の晩酌をもっと楽しみたいなーと思って色々探してるんですよね。
 
-<br><br>
-<h2>💡 ${nameA} の特徴と魅力</h2>
-<p>サクッと準備して一人飲みを楽しみたいなら、コンパクトで扱いやすいタイプが重宝します。<br><br>手軽さと使い勝手のバランスが非常に優れていますよ。</p>
+でも美味しそうなものが多すぎて、どれから試すべきか本当に迷う……。
 
-<br><br>
-<h2>💡 ${nameB} の特徴と魅力</h2>
-<p>家族や友人とおうち宴会を楽しみたいなら、一度に調理できる容量や火力が重要になります。<br><br>しっかり調理したい方にはピッタリの仕様ですね。</p>
+**「え、これどっち買えばいいんだ？」**って本気で悩んでます。
 
-<br><br>
-<h2>⚖️ どちらを選ぶべき？比較まとめ</h2>
-<p>手軽さとコスパを最優先するなら商品A、機能性や容量にこだわるなら商品Bが間違いなさそうです。<br><br>現在のセール価格や獲得できる還元ポイントは商品詳細からチェックできますので、気になった方はぜひ覗いてみてくださいね！</p>
+---
+
+## 『${nameA}』が気になっている理由
+
+まず見つけたのが、**『${fullNameA}』**（約${priceA}円）。
+
+レビューを見ていると評判が良くて、自分の好みの味わいや晩酌スタイルにも合いそうなんですよね。
+
+---
+
+## もう一つの候補『${nameB}』の魅力
+
+そしてもう一つ気になっているのが、**『${fullNameB}』**（約${priceB}円）。
+
+こっちはこっちで特徴が際立っていて、週末にじっくり楽しむのに最高そう。
+
+---
+
+## 価格差は約${priceDiff}円。値段がほぼ同じだからこそ純粋に悩む
+
+2つの価格差は**約${priceDiff}円**。
+
+ほぼ同価格帯だからこそ、値段の損得ではなく純粋に「味の好み」や「合わせたいおつまみ」で選ぶことになります。
+
+---
+
+## 正直、どっちに惹かれてる？
+
+今のところ、自分の中では**7:3で『${nameA}』寄り**。
+
+でも週末になったら『${nameB}』をポチっている気もして、まだ決めきれません。
+
+---
+
+## まとめ：もう少し迷ってみる
+
+どっちも魅力的だからもう少し考えてみます！
+
+一応、今回悩んでた商品リンクを貼っておきますね。
+
+皆ならどっちを選びますか？ 辛口派・甘口派などぜひ教えてください！
 `;
 
   return {
     title: title,
-    contentHtml: contentHtml,
-    tags: ["卓上家電", "おうち居酒屋", "比較レビュー", "楽天おすすめ"]
+    contentHtml: convertToCleanHtml(rawFallback),
+    tags: [category === 'liquor' ? '日本酒' : 'ふるさと納税', '晩酌', '家飲み', '本音比較']
   };
 }
 
@@ -933,7 +885,6 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
 
     console.log('--------------------------------------------------');
     console.log('【安全運用成功】生成した比較記事を Ameba の「下書き」として正常保存しました！');
-    console.log('人間に手による最終チェック・推演が可能です。');
     console.log('--------------------------------------------------');
 
   } catch (error) {
@@ -949,16 +900,16 @@ async function main() {
   const randomObj = selectRandomKeyword();
   const randomKeyword = typeof randomObj === 'object' ? randomObj.keyword : randomObj;
 
-  console.log(`検索キーワード: 「${randomKeyword}」 (カテゴリ: ${randomObj.category || 'appliance'})`);
+  console.log(`検索キーワード: 「${randomKeyword}」 (カテゴリ: ${randomObj.category || 'liquor'})`);
   const itemPair = await fetchRakutenItemPair(randomObj);
 
   if (!itemPair) {
-    console.log('対象商品が2つ以上見つかりませんでした。スキップします。');
+    console.log('対象商品（同価格帯±2,000円以内のペア）が見つかりませんでした。スキップします。');
     return;
   }
 
-  console.log(`比較商品A:「${itemPair.itemA.itemName.slice(0, 20)}...」`);
-  console.log(`比較商品B:「${itemPair.itemB.itemName.slice(0, 20)}...」`);
+  console.log(`比較商品A:「${itemPair.itemA.itemName.slice(0, 20)}...」 (${itemPair.itemA.price}円)`);
+  console.log(`比較商品B:「${itemPair.itemB.itemName.slice(0, 20)}...」 (${itemPair.itemB.price}円)`);
   console.log('2商品比較記事を生成します...');
 
   const article = await generateArticlePair(itemPair);
