@@ -86,14 +86,15 @@ function getProfileData() {
   return '';
 }
 
-// 単品商品のみを厳選し、セット・飲み比べ・食べ比べ・付属品・業務用を徹底排除する判定関数
+// 単品商品のみを厳選し、セット・飲み比べ・食べ比べ・定期便・付属品・業務用を徹底排除する判定関数
 function isMainProduct(item) {
   const name = item.itemName;
   const price = item.itemPrice;
 
-  // NGキーワード（セット商品・飲み比べ・食べ比べ・複数本・ケース買い・付属品等の徹底排除）
+  // NGキーワード（セット商品・飲み比べ・食べ比べ・定期便・複数本・ケース買い・付属品等の徹底排除）
   const ngKeywords = [
     'セット', 'まとめ買い', '飲み比べ', '食べ比べ', '詰め合わせ', 'アソート',
+    '定期便', '定期購入', '定期コース', '選べる定期便',
     '2本', '3本', '4本', '5本', '6本', '12本', '24本', '本組', '本入', '缶入',
     '2個', '3個', '4個', '5個', '6個', '個入', '箱入', '2箱', '3箱',
     'バラエティ', 'セレクト', 'ギフトセット', 'パック', '箱買い', 'ケース販売', 'ケース買い', '1ケース', '2ケース',
@@ -121,7 +122,7 @@ function cleanProductName(name) {
   const quoteMatch = name.match(/『(.*?)』|「(.*?)」/);
   if (quoteMatch) {
     const quoted = (quoteMatch[1] || quoteMatch[2]).trim();
-    if (quoted.length >= 2 && !/送料無料|ポイント|予約|限定|楽天|ふるさと納税/.test(quoted)) {
+    if (quoted.length >= 2 && !/送料無料|ポイント|予約|限定|楽天|ふるさと納税|定期便/.test(quoted)) {
       return quoted;
     }
   }
@@ -130,7 +131,7 @@ function cleanProductName(name) {
     // 【...】 [ ...] （...） (...) 内のノイズテキスト削除
     .replace(/【.*?】|\[.*?\]|（.*?）|\(.*?\)/g, ' ')
     .replace(/※.*/g, '') // ※以降の注意書き削除
-    .replace(/送料無料|ポイント\d+倍|実質\d+円|セール|在庫処分|あす楽|即納|予約|限定|メーカー直送|代引不可|ふるさと納税|返礼品|お中元|お歳暮|ギフト|プレゼント|父の日|母の日|敬老の日/gi, ' ')
+    .replace(/送料無料|ポイント\d+倍|実質\d+円|セール|在庫処分|あす楽|即納|予約|限定|メーカー直送|代引不可|ふるさと納税|返礼品|お中元|お歳暮|ギフト|プレゼント|父の日|母の日|敬老の日|定期便|選べる/gi, ' ')
     .replace(/[\s\t\n]+/g, ' ')
     .trim();
 
@@ -192,154 +193,7 @@ function areItemsTooSimilar(itemA, itemB) {
   return false;
 }
 
-// 1. 楽天APIから2つのメイン商品情報（比較用）を取得
-// ルール:
-// - 単品商品のみ（セット・飲み比べ・食べ比べは完全除外）
-// - 価格差は最大±2,000円以内（同価格帯での純粋な味わい・ペアリング対決）
-async function fetchRakutenItemPair(primaryObj) {
-  const primaryKeyword = typeof primaryObj === 'object' ? primaryObj.keyword : primaryObj;
-  const category = typeof primaryObj === 'object' ? primaryObj.category : 'liquor';
-
-  const appId = process.env.RAKUTEN_APPLICATION_ID;
-  const affId = process.env.RAKUTEN_AFFILIATE_ID;
-  const accessKey = process.env.RAKUTEN_ACCESS_KEY;
-
-  if (!appId || !accessKey) {
-    throw new Error('RAKUTEN_APPLICATION_ID または RAKUTEN_ACCESS_KEY が設定されていません。');
-  }
-
-  // 楽天API呼び出しヘルパー
-  const searchRakuten = async (kw) => {
-    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&applicationId=${appId}&accessKey=${accessKey}`;
-    if (affId) url += `&affiliateId=${affId}`;
-    try {
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json && json.Items && json.Items.length > 0) {
-        return json.Items.filter(i => isMainProduct(i.Item));
-      }
-    } catch (e) {
-      console.log(`[Rakuten API エラー (${kw})]:`, e.message);
-    }
-    return [];
-  };
-
-  const postedList = getPostedItems();
-
-  let itemA = null;
-  let itemB = null;
-
-  console.log(`[比較対決モード] 同カテゴリ・同価格帯（価格差±2,000円以内）比較モード (検索キーワード: ${primaryKeyword}, カテゴリ: ${category})`);
-  const rawItems = await searchRakuten(primaryKeyword);
-  const items = rawItems.filter(i => {
-    i.Item.cleanName = cleanProductName(i.Item.itemName);
-    return !isItemAlreadyPosted(i.Item, postedList);
-  });
-
-  // 価格差最大±2,000円以内のペアを探す
-  if (items.length >= 2) {
-    const shuffle = items.sort(() => 0.5 - Math.random());
-    for (let i = 0; i < shuffle.length; i++) {
-      const candidateA = shuffle[i].Item;
-      for (let j = i + 1; j < shuffle.length; j++) {
-        const candidateB = shuffle[j].Item;
-        const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
-        if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
-          itemA = candidateA;
-          itemB = candidateB;
-          break;
-        }
-      }
-      if (itemA && itemB) break;
-    }
-  }
-
-  // 同一キーワード内で価格差±2,000円ペアが見つからない場合、同カテゴリ内キーワードから補填
-  if (!itemA || !itemB) {
-    console.log(`[補填モード] キーワード「${primaryKeyword}」で価格差±2,000円以内のペアが不足のため、同カテゴリ内から代替検索`);
-    let sameCategoryPool = [];
-    if (category === 'liquor') sameCategoryPool = [...SAKE_KEYWORDS, ...WHISKY_KEYWORDS, ...SHOCHU_KEYWORDS, ...WINE_KEYWORDS];
-    else sameCategoryPool = [...SWEETS_KEYWORDS, ...SNACK_KEYWORDS];
-
-    const altPool = sameCategoryPool.filter(k => k !== primaryKeyword);
-    const combinedCandidates = [...items.map(i => i.Item)];
-
-    for (const altKw of altPool.slice(0, 3)) {
-      const rawAlt = await searchRakuten(altKw);
-      const filteredAlt = rawAlt.map(i => {
-        i.Item.cleanName = cleanProductName(i.Item.itemName);
-        return i.Item;
-      }).filter(item => !isItemAlreadyPosted(item, postedList));
-      combinedCandidates.push(...filteredAlt);
-    }
-
-    if (combinedCandidates.length >= 2) {
-      const shuffleComb = combinedCandidates.sort(() => 0.5 - Math.random());
-      for (let i = 0; i < shuffleComb.length; i++) {
-        const candidateA = shuffleComb[i];
-        for (let j = i + 1; j < shuffleComb.length; j++) {
-          const candidateB = shuffleComb[j];
-          const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
-          if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
-            itemA = candidateA;
-            itemB = candidateB;
-            break;
-          }
-        }
-        if (itemA && itemB) break;
-      }
-    }
-  }
-
-  if (!itemA || !itemB) return null;
-
-  // JANコード・商品コード・URL・商品名の識別子を永続保存
-  savePostedItem(itemA);
-  savePostedItem(itemB);
-
-  const finalDiff = Math.abs(itemA.itemPrice - itemB.itemPrice);
-  console.log(`[比較対決設定確定] [カテゴリ:${category}] 商品A: ${cleanProductName(itemA.itemName)} (${itemA.itemPrice}円) VS 商品B: ${cleanProductName(itemB.itemName)} (${itemB.itemPrice}円) [価格差: ${finalDiff}円]`);
-
-  return {
-    category,
-    itemA: {
-      itemName: itemA.itemName,
-      cleanName: cleanProductName(itemA.itemName),
-      itemUrl: itemA.affiliateUrl || itemA.itemUrl,
-      imageUrl: itemA.mediumImageUrls?.[0]?.imageUrl || itemA.mediumImageUrls?.[0] || '',
-      price: itemA.itemPrice
-    },
-    itemB: {
-      itemName: itemB.itemName,
-      cleanName: cleanProductName(itemB.itemName),
-      itemUrl: itemB.affiliateUrl || itemB.itemUrl,
-      imageUrl: itemB.mediumImageUrls?.[0]?.imageUrl || itemB.mediumImageUrls?.[0] || '',
-      price: itemB.itemPrice
-    }
-  };
-}
-
-// 投稿済みキーワードの記録・読み込み（連打を防止）
-function getUsedKeywords() {
-  const filePath = './used_keywords.json';
-  if (fs.existsSync(filePath)) {
-    try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    } catch (e) {
-      return [];
-    }
-  }
-  return [];
-}
-
-function saveUsedKeyword(keyword) {
-  const used = getUsedKeywords();
-  used.push(keyword);
-  if (used.length > 8) used.shift();
-  fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
-}
-
-// === 厳選ターゲット1: 単品本格酒銘柄（日本酒・ウイスキー・焼酎・ワイン等） ===
+// === 厳選ターゲット1: 単品本格酒銘柄（同種同士で比較） ===
 const SAKE_KEYWORDS = [
   '日本酒 純米大吟醸 720ml 瓶 単品',
   '日本酒 純米吟醸 辛口 720ml 単品',
@@ -385,6 +239,165 @@ const SNACK_KEYWORDS = [
   'ふるさと納税 干物 珍味 おつまみ'
 ];
 
+function getCategoryKeywords(subCategory) {
+  switch (subCategory) {
+    case 'sake': return SAKE_KEYWORDS;
+    case 'whisky': return WHISKY_KEYWORDS;
+    case 'shochu': return SHOCHU_KEYWORDS;
+    case 'wine': return WINE_KEYWORDS;
+    case 'sweets': return SWEETS_KEYWORDS;
+    case 'snack': return SNACK_KEYWORDS;
+    default: return SAKE_KEYWORDS;
+  }
+}
+
+// 1. 楽天APIから2つのメイン商品情報（比較用）を取得
+// ルール:
+// - 単品商品のみ（セット・飲み比べ・食べ比べ・定期便は完全除外）
+// - 価格差は最大±2,000円以内（同価格帯での純粋な味わい・ペアリング対決）
+// - 同種のお酒同士（日本酒vs日本酒、ウイスキーvsウイスキー等）または同種のおつまみ同士で対決
+async function fetchRakutenItemPair(primaryObj) {
+  const primaryKeyword = typeof primaryObj === 'object' ? primaryObj.keyword : primaryObj;
+  const category = typeof primaryObj === 'object' ? primaryObj.category : 'liquor';
+  const subCategory = typeof primaryObj === 'object' ? primaryObj.subCategory : 'sake';
+
+  const appId = process.env.RAKUTEN_APPLICATION_ID;
+  const affId = process.env.RAKUTEN_AFFILIATE_ID;
+  const accessKey = process.env.RAKUTEN_ACCESS_KEY;
+
+  if (!appId || !accessKey) {
+    throw new Error('RAKUTEN_APPLICATION_ID または RAKUTEN_ACCESS_KEY が設定されていません。');
+  }
+
+  // 楽天API呼び出しヘルパー
+  const searchRakuten = async (kw) => {
+    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&applicationId=${appId}&accessKey=${accessKey}`;
+    if (affId) url += `&affiliateId=${affId}`;
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json && json.Items && json.Items.length > 0) {
+        return json.Items.filter(i => isMainProduct(i.Item));
+      }
+    } catch (e) {
+      console.log(`[Rakuten API エラー (${kw})]:`, e.message);
+    }
+    return [];
+  };
+
+  const postedList = getPostedItems();
+
+  let itemA = null;
+  let itemB = null;
+
+  console.log(`[比較対決モード] 同種別・同価格帯（価格差±2,000円以内）比較モード (ジャンル: ${subCategory}, 検索キーワード: ${primaryKeyword})`);
+  const rawItems = await searchRakuten(primaryKeyword);
+  const items = rawItems.filter(i => {
+    i.Item.cleanName = cleanProductName(i.Item.itemName);
+    return !isItemAlreadyPosted(i.Item, postedList);
+  });
+
+  // 価格差最大±2,000円以内のペアを探す
+  if (items.length >= 2) {
+    const shuffle = items.sort(() => 0.5 - Math.random());
+    for (let i = 0; i < shuffle.length; i++) {
+      const candidateA = shuffle[i].Item;
+      for (let j = i + 1; j < shuffle.length; j++) {
+        const candidateB = shuffle[j].Item;
+        const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
+        if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
+          itemA = candidateA;
+          itemB = candidateB;
+          break;
+        }
+      }
+      if (itemA && itemB) break;
+    }
+  }
+
+  // 同一キーワード内で価格差±2,000円ペアが見つからない場合、同サブジャンル内（例: 日本酒なら日本酒キーワード）から補填
+  if (!itemA || !itemB) {
+    console.log(`[補填モード] キーワード「${primaryKeyword}」で価格差±2,000円以内のペアが不足のため、同ジャンル「${subCategory}」内から代替検索`);
+    const sameSubPool = getCategoryKeywords(subCategory);
+    const altPool = sameSubPool.filter(k => k !== primaryKeyword);
+    const combinedCandidates = [...items.map(i => i.Item)];
+
+    for (const altKw of altPool) {
+      const rawAlt = await searchRakuten(altKw);
+      const filteredAlt = rawAlt.map(i => {
+        i.Item.cleanName = cleanProductName(i.Item.itemName);
+        return i.Item;
+      }).filter(item => !isItemAlreadyPosted(item, postedList));
+      combinedCandidates.push(...filteredAlt);
+    }
+
+    if (combinedCandidates.length >= 2) {
+      const shuffleComb = combinedCandidates.sort(() => 0.5 - Math.random());
+      for (let i = 0; i < shuffleComb.length; i++) {
+        const candidateA = shuffleComb[i];
+        for (let j = i + 1; j < shuffleComb.length; j++) {
+          const candidateB = shuffleComb[j];
+          const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
+          if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
+            itemA = candidateA;
+            itemB = candidateB;
+            break;
+          }
+        }
+        if (itemA && itemB) break;
+      }
+    }
+  }
+
+  if (!itemA || !itemB) return null;
+
+  // JANコード・商品コード・URL・商品名の識別子を永続保存
+  savePostedItem(itemA);
+  savePostedItem(itemB);
+
+  const finalDiff = Math.abs(itemA.itemPrice - itemB.itemPrice);
+  console.log(`[比較対決設定確定] [ジャンル:${subCategory}] 商品A: ${cleanProductName(itemA.itemName)} (${itemA.itemPrice}円) VS 商品B: ${cleanProductName(itemB.itemName)} (${itemB.itemPrice}円) [価格差: ${finalDiff}円]`);
+
+  return {
+    category,
+    subCategory,
+    itemA: {
+      itemName: itemA.itemName,
+      cleanName: cleanProductName(itemA.itemName),
+      itemUrl: itemA.affiliateUrl || itemA.itemUrl,
+      imageUrl: itemA.mediumImageUrls?.[0]?.imageUrl || itemA.mediumImageUrls?.[0] || '',
+      price: itemA.itemPrice
+    },
+    itemB: {
+      itemName: itemB.itemName,
+      cleanName: cleanProductName(itemB.itemName),
+      itemUrl: itemB.affiliateUrl || itemB.itemUrl,
+      imageUrl: itemB.mediumImageUrls?.[0]?.imageUrl || itemB.mediumImageUrls?.[0] || '',
+      price: itemB.itemPrice
+    }
+  };
+}
+
+// 投稿済みキーワードの記録・読み込み（連打を防止）
+function getUsedKeywords() {
+  const filePath = './used_keywords.json';
+  if (fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+}
+
+function saveUsedKeyword(keyword) {
+  const used = getUsedKeywords();
+  used.push(keyword);
+  if (used.length > 8) used.shift();
+  fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
+}
+
 function selectRandomKeyword(excludeList = []) {
   const usedKeywords = getUsedKeywords();
   
@@ -393,6 +406,7 @@ function selectRandomKeyword(excludeList = []) {
   
   let keywordPool = [];
   let category = 'liquor';
+  let subCategory = 'sake';
 
   if (rand < 0.50) {
     // 本格お酒銘柄（日本酒・ウイスキー・焼酎・ワイン）
@@ -400,24 +414,34 @@ function selectRandomKeyword(excludeList = []) {
     const liquorTypeRand = Math.random();
     if (liquorTypeRand < 0.35) {
       keywordPool = SAKE_KEYWORDS;
+      subCategory = 'sake';
     } else if (liquorTypeRand < 0.65) {
       keywordPool = WHISKY_KEYWORDS;
+      subCategory = 'whisky';
     } else if (liquorTypeRand < 0.85) {
       keywordPool = SHOCHU_KEYWORDS;
+      subCategory = 'shochu';
     } else {
       keywordPool = WINE_KEYWORDS;
+      subCategory = 'wine';
     }
   } else {
     // ふるさと納税（スイーツ or おつまみ）
     category = 'furusato';
-    keywordPool = Math.random() < 0.5 ? SWEETS_KEYWORDS : SNACK_KEYWORDS;
+    if (Math.random() < 0.5) {
+      keywordPool = SWEETS_KEYWORDS;
+      subCategory = 'sweets';
+    } else {
+      keywordPool = SNACK_KEYWORDS;
+      subCategory = 'snack';
+    }
   }
 
   const available = keywordPool.filter(k => !usedKeywords.includes(k) && !excludeList.includes(k));
   const pool = available.length > 0 ? available : keywordPool.filter(k => !excludeList.includes(k));
   const chosen = pool[Math.floor(Math.random() * pool.length)] || keywordPool[0];
   saveUsedKeyword(chosen);
-  return { keyword: chosen, category };
+  return { keyword: chosen, category, subCategory };
 }
 
 // 2. AIで2商品比較型記事の本文・タイトル・ハッシュタグを生成
@@ -436,6 +460,13 @@ async function generateArticlePair(itemPair) {
 
   const priceDiff = Math.abs(itemPair.itemA.price - itemPair.itemB.price).toLocaleString();
   const category = itemPair.category || 'liquor';
+  const subCategory = itemPair.subCategory || 'sake';
+
+  const defaultTag = subCategory === 'sake' ? '日本酒' :
+                     subCategory === 'whisky' ? 'ウイスキー' :
+                     subCategory === 'shochu' ? '焼酎' :
+                     subCategory === 'wine' ? 'ワイン' :
+                     subCategory === 'sweets' ? 'スイーツ' : 'ふるさと納税';
 
   const prompt = `
 以下の【プロフィール設定】と【比較する2つの商品情報】を基に、Amebaブログ用の「本気で迷っている個人ブログ記事」を作成してください。
@@ -454,7 +485,7 @@ ${profileContent}
 - 略称・通称: ${nameB}
 - 価格/寄付金額: ${priceB}円
 - 価格差: 約${priceDiff}円（※価格差は最大でも2,000円以内のほぼ同価格帯です）
-- カテゴリ: ${category === 'liquor' ? '本格お酒（日本酒・ウイスキー・焼酎・ワイン等）' : 'ふるさと納税（おつまみ・スイーツ）'}
+- カテゴリ: ${category === 'liquor' ? `本格お酒（${defaultTag}対決）` : `ふるさと納税（${defaultTag}対決）`}
 ==================================================
 
 【最重要！記事のスタンスと方向性（商品比較記事30% / 晩酌好きのリアルな独白迷いブログ70%）】
@@ -469,7 +500,7 @@ ${profileContent}
 1. **冒頭の個人ブログ感・等身大の導入**:
    - いきなり商品紹介から始めないこと。
    - 例：「最近お酒を色々と飲み比べてみたいなーって思ってるんですよね。」「夜に一人で飲むときって、ちょっといいおつまみがあるとテンション上がりますよね。」といった、日常の晩酌の一コマや個人の探求から始める。
-   - 「でも美味しそうなものが多すぎてどれから手をつけるべきか選べない...」と共感を誘う立ち位置を取る。
+   - 「でも美味しそうな銘柄（返礼品）が多すぎてどれから手をつけるべきか選べない...」と共感を誘う立ち位置を取る。
 
 2. **「なぜこの2つで迷っているのか」の個人的動機**:
    - 記事ごとに独自の自然な理由を入れてください（例：「最近辛口の日本酒が気になってる」「スモーキーなウイスキーを開拓したかった」「ずっと名前を見かけて気になっていた」「ハイボールに合うちょっと贅沢なナッツを探していた」など）。
@@ -546,7 +577,7 @@ ${profileContent}
 {
   "title": "記事タイトル文字列",
   "contentHtml": "（Markdown形式の本文文字列）",
-  "tags": ["${category === 'liquor' ? '日本酒' : 'ふるさと納税'}", "晩酌", "家飲み", "本音比較"]
+  "tags": ["${defaultTag}", "晩酌", "家飲み", "本音比較"]
 }
 `;
 
@@ -564,6 +595,7 @@ ${profileContent}
         const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
         const article = JSON.parse(cleanedJson);
         article.contentHtml = convertToCleanHtml(article.contentHtml);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : [defaultTag, '晩酌', '家飲み', '本音比較'];
         console.log(`[AI生成] Gemini (${modelName}) で比較記事の生成に成功！`);
         return article;
       } catch (err) {
@@ -595,6 +627,7 @@ ${profileContent}
         const text = chatCompletion.choices[0]?.message?.content || '';
         const article = JSON.parse(text);
         article.contentHtml = convertToCleanHtml(article.contentHtml);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : [defaultTag, '晩酌', '家飲み', '本音比較'];
         console.log(`[AI生成] Groq (${m.name}) で比較記事の生成に成功！`);
         return article;
       } catch (err) {
@@ -660,7 +693,7 @@ ${profileContent}
   return {
     title: title,
     contentHtml: convertToCleanHtml(rawFallback),
-    tags: [category === 'liquor' ? '日本酒' : 'ふるさと納税', '晩酌', '家飲み', '本音比較']
+    tags: [defaultTag, '晩酌', '家飲み', '本音比較']
   };
 }
 
@@ -730,7 +763,7 @@ async function injectEditorContent(page, fullHtml) {
 }
 
 // 3. PlaywrightによるAmeba自動投稿処理（下書き保存）
-async function postToAmeba(title, rawContentHtml, tags, itemPair) {
+async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
   const amebaId = process.env.AMEBA_ID;
   const amebaPassword = process.env.AMEBA_PASSWORD;
   const amebaCookieJson = process.env.AMEBA_COOKIES;
@@ -800,7 +833,8 @@ async function postToAmeba(title, rawContentHtml, tags, itemPair) {
     }
 
     console.log('ハッシュタグおよびカバー画像URLを設定中...');
-    const formattedTags = tags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
+    const safeTags = Array.isArray(tags) ? tags : [];
+    const formattedTags = safeTags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
     
     // ハッシュタグ設定 ＆ カバー画像URL（image_url）に商品Aの画像URLを設定してモーダルをスキップさせる
     await page.evaluate(({ tagStr, coverUrl }) => {
@@ -900,11 +934,11 @@ async function main() {
   const randomObj = selectRandomKeyword();
   const randomKeyword = typeof randomObj === 'object' ? randomObj.keyword : randomObj;
 
-  console.log(`検索キーワード: 「${randomKeyword}」 (カテゴリ: ${randomObj.category || 'liquor'})`);
+  console.log(`検索キーワード: 「${randomKeyword}」 (ジャンル: ${randomObj.subCategory || randomObj.category})`);
   const itemPair = await fetchRakutenItemPair(randomObj);
 
   if (!itemPair) {
-    console.log('対象商品（同価格帯±2,000円以内のペア）が見つかりませんでした。スキップします。');
+    console.log('対象商品（同種・同価格帯±2,000円以内のペア）が見つかりませんでした。スキップします。');
     return;
   }
 
