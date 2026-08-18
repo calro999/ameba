@@ -204,210 +204,113 @@ function areItemsTooSimilar(itemA, itemB) {
   return false;
 }
 
-// === 超拡充ターゲット1: 日本酒（全国47都道府県の銘醸地・地酒・特定名称・酒米・製法） ===
+// === 検索キーワード群: 2〜3単語の自然な粒度でヒット率を最大化 ===
 const SAKE_KEYWORDS = [
-  '日本酒 純米大吟醸 720ml 瓶 単品',
-  '日本酒 純米吟醸 辛口 720ml 単品',
-  '日本酒 特別純米 地酒 720ml 単品',
-  '日本酒 無濾過生原酒 720ml 単品',
-  '日本酒 山田錦 純米大吟醸 720ml 単品',
-  '日本酒 雄町 純米吟醸 720ml 単品',
-  '日本酒 美山錦 純米 720ml 単品',
-  '日本酒 五百万石 辛口 純米 720ml 単品',
-  '日本酒 亀の尾 純米大吟醸 720ml 単品',
-  '日本酒 愛山 純米吟醸 720ml 単品',
-  '日本酒 山廃仕込み 純米 720ml 単品',
-  '日本酒 生酛仕込み 純米大吟醸 720ml 単品',
-  '日本酒 熟成古酒 720ml 単品',
-  '日本酒 にごり酒 活性にごり 720ml 単品',
-  '日本酒 秋田 地酒 720ml 瓶 単品',
-  '日本酒 山形 地酒 出羽燦々 720ml 単品',
-  '日本酒 青森 地酒 田酒 720ml 単品',
-  '日本酒 岩手 南部杜氏 地酒 720ml 単品',
-  '日本酒 宮城 辛口 純米 720ml 単品',
-  '日本酒 福島 地酒 芳醇旨口 720ml 単品',
-  '日本酒 新潟 辛口 端麗 720ml 瓶 単品',
-  '日本酒 長野 美山錦 地酒 720ml 単品',
-  '日本酒 石川 能登杜氏 純米 720ml 単品',
-  '日本酒 福井 地酒 黒龍 720ml 単品',
-  '日本酒 富山 辛口 立山 720ml 単品',
-  '日本酒 静岡 吟醸 酵母 720ml 単品',
-  '日本酒 兵庫 灘の酒 山田錦 720ml 単品',
-  '日本酒 京都 伏見 祝 純米 720ml 単品',
-  '日本酒 奈良 発祥の地 地酒 720ml 単品',
-  '日本酒 広島 吟醸発祥 地酒 720ml 単品',
-  '日本酒 岡山 雄町サミット 純米 720ml 単品',
-  '日本酒 島根 出雲 地酒 720ml 単品',
-  '日本酒 山口 貴 純米大吟醸 720ml 単品',
-  '日本酒 高知 土佐 辛口 720ml 単品',
-  '日本酒 愛媛 地酒 純米 720ml 単品',
-  '日本酒 佐賀 鍋島 純米吟醸 720ml 単品',
-  '日本酒 福岡 筑後 地酒 720ml 単品',
-  '日本酒 熊本 熊本酵母 純米 720ml 単品'
+  '日本酒 純米大吟醸 720ml',
+  '日本酒 純米吟醸 720ml',
+  '日本酒 特別純米 720ml',
+  '日本酒 無濾過生原酒 720ml',
+  '日本酒 辛口 720ml',
+  '日本酒 山田錦 720ml',
+  '日本酒 雄町 720ml',
+  '日本酒 美山錦 720ml',
+  '日本酒 山廃 720ml',
+  '日本酒 生酛 720ml',
+  '日本酒 秋田 地酒 720ml',
+  '日本酒 山形 地酒 720ml',
+  '日本酒 青森 地酒 720ml',
+  '日本酒 新潟 地酒 720ml',
+  '日本酒 福島 地酒 720ml',
+  '日本酒 長野 地酒 720ml',
+  '日本酒 石川 地酒 720ml',
+  '日本酒 福井 地酒 720ml',
+  '日本酒 高知 地酒 720ml',
+  '日本酒 佐賀 地酒 720ml'
 ];
 
-// === 超拡充ターゲット2: ウイスキー（世界5大ウイスキー・スコッチ各産地・アイラ・バーボン・新興国） ===
 const WHISKY_KEYWORDS = [
-  'ウイスキー シングルモルト 700ml 単品',
-  'ジャパニーズウイスキー ボトル 単品 700ml',
-  'スコッチウイスキー シングルモルト 700ml 単品',
-  'アイラ ウイスキー スモーキー 700ml 単品',
-  'スペイサイド シングルモルト 700ml 単品',
-  'ハイランド シングルモルト ウイスキー 700ml 単品',
-  'ローランド シングルモルト 700ml 単品',
-  'キャンベルタウン ウイスキー 700ml 単品',
-  'シェリーカスク ウイスキー 700ml 単品',
-  'ポートカスク ウイスキー 700ml 単品',
-  'ミズナラ樽 ウイスキー 700ml 単品',
-  'ピート ウイスキー ヘビリーピーテッド 700ml 単品',
-  'カスクストレングス ウイスキー 700ml 単品',
-  'バーボンウイスキー プレミアム 700ml 単品',
-  'ケンタッキー ストレート バーボン 700ml 単品',
-  'テネシーウイスキー 700ml 単品',
-  'スモールバッチ バーボン 700ml 単品',
-  'シングルバレル バーボン 700ml 単品',
-  'ライウイスキー プレミアム 700ml 単品',
-  'クラフトウイスキー 国産 700ml 単品',
-  '北海道 厚岸 ウイスキー 700ml 単品',
-  '長野 駒ヶ岳 マルスウイスキー 700ml 単品',
-  '鹿児島 マルス津貫 ウイスキー 700ml 単品',
-  '秩父 イチローズモルト 700ml 単品',
-  '滋賀 長浜 アマハガン ウイスキー 700ml 単品',
-  'アイリッシュウイスキー シングルポットスチル 700ml 単品',
-  'カナディアンウイスキー プレミアム 700ml 単品',
-  '台湾 カバラン ウイスキー シングルモルト 700ml 単品',
-  'インド アムルット シングルモルト 700ml 単品',
-  'オーストラリア クラフトウイスキー 700ml 単品'
+  'ウイスキー シングルモルト 700ml',
+  'ジャパニーズウイスキー 700ml',
+  'スコッチウイスキー 700ml',
+  'アイラ ウイスキー 700ml',
+  'スペイサイド ウイスキー 700ml',
+  'ハイランド ウイスキー 700ml',
+  'バーボンウイスキー 700ml',
+  'シェリーカスク ウイスキー 700ml',
+  'ピート ウイスキー 700ml',
+  'クラフトウイスキー 700ml',
+  'アイリッシュウイスキー 700ml',
+  '台湾 カバラン ウイスキー'
 ];
 
-// === 超拡充ターゲット3: 焼酎（本格芋・麦・米・黒糖・泡盛・そば・栗・原酒・長期熟成） ===
 const SHOCHU_KEYWORDS = [
-  '本格焼酎 芋焼酎 瓶 単品 720ml',
-  '本格焼酎 麦焼酎 瓶 単品 720ml',
-  '本格焼酎 米焼酎 吟醸仕込み 720ml 単品',
-  '本格焼酎 黒糖焼酎 奄美 720ml 単品',
-  '沖縄 泡盛 古酒 クース 720ml 単品',
-  '本格焼酎 そば焼酎 720ml 単品',
-  '本格焼酎 栗焼酎 720ml 単品',
-  '芋焼酎 原酒 甕雫 720ml 単品',
-  '長期熟成 麦焼酎 樽貯蔵 720ml 単品',
-  'プレミアム 芋焼酎 鹿児島 720ml 単品',
-  '鹿児島 芋焼酎 黄金千貫 720ml 単品',
-  '鹿児島 芋焼酎 ジョイホワイト 720ml 単品',
-  '鹿児島 芋焼酎 紫芋 綾紫 720ml 単品',
-  '宮崎 芋焼酎 かめ壺仕込み 720ml 単品',
-  '宮崎 芋焼酎 熟成 720ml 単品',
-  '大分 麦焼酎 全量麦 720ml 単品',
-  '長崎 壱岐 麦焼酎 熟成 720ml 単品',
-  '福岡 麦焼酎 焙煎 720ml 単品',
-  '熊本 球磨焼酎 米焼酎 シェリー樽 720ml 単品',
-  '奄美 黒糖焼酎 長期貯蔵 720ml 単品',
-  '沖縄 泡盛 粗濾過 44度 720ml 単品',
-  '吟醸 粕取焼酎 720ml 単品'
+  '本格焼酎 芋焼酎 720ml',
+  '本格焼酎 麦焼酎 720ml',
+  '本格焼酎 米焼酎 720ml',
+  '本格焼酎 黒糖焼酎 720ml',
+  '沖縄 泡盛 古酒 720ml',
+  '鹿児島 芋焼酎 720ml',
+  '宮崎 芋焼酎 720ml',
+  '大分 麦焼酎 720ml',
+  '壱岐 麦焼酎 720ml',
+  '球磨焼酎 米 720ml'
 ];
 
-// === 超拡充ターゲット4: ワイン（フランス・イタリア・スペイン・新世界・チリ・南アフリカ・日本） ===
 const WINE_KEYWORDS = [
-  '赤ワイン フルボディ 750ml 単品',
-  '白ワイン 辛口 750ml 単品',
-  'スパークリングワイン 辛口 750ml 単品',
-  'シャンパン 辛口 ブリュット 750ml 単品',
-  'ボルドー 赤ワイン フルボディ メドック 750ml 単品',
-  'ボルドー サンジュリアン 赤ワイン 750ml 単品',
-  'ブルゴーニュ ピノノワール 赤ワイン 750ml 単品',
-  'ブルゴーニュ シャルドネ 白ワイン 750ml 単品',
-  'シャブリ 白ワイン 辛口 特級 750ml 単品',
-  'コートデュローヌ シラー 赤ワイン 750ml 単品',
-  'イタリア 赤ワイン バローロ 750ml 単品',
-  'イタリア 赤ワイン バルバレスコ 750ml 単品',
-  'キャンティ クラシコ 赤ワイン 750ml 単品',
-  'イタリア アマローネ 赤ワイン 750ml 単品',
-  'トスカーナ ブルネッロ ディ モンタルチーノ 750ml 単品',
-  'シチリア 赤ワイン ネロダーヴォラ 750ml 単品',
-  'スペイン リオハ 赤ワイン グランレセルバ 750ml 単品',
-  'スペイン プリオラート 赤ワイン 750ml 単品',
-  'スペイン カヴァ 瓶内二次発酵 750ml 単品',
-  'チリ 赤ワイン カベルネソーヴィニヨン 高級 750ml 単品',
-  'チリ 赤ワイン カルメネール 750ml 単品',
-  'アルゼンチン マルベック 赤ワイン フルボディ 750ml 単品',
-  '南アフリカ 赤ワイン ピノタージュ 750ml 単品',
-  '南アフリカ 白ワイン シュナンブラン 750ml 単品',
-  '南アフリカ ステレンボッシュ 赤ワイン 750ml 単品',
-  'ナパバレー カベルネソーヴィニヨン 赤ワイン 750ml 単品',
-  'オレゴン ピノノワール 赤ワイン 750ml 単品',
-  'オーストラリア バロッサバレー シラーズ 750ml 単品',
-  'ニュージーランド マールボロ ソーヴィニヨンブラン 750ml 単品',
-  'ニュージーランド セントラルオタゴ ピノノワール 750ml 単品',
-  'ドイツ リースリング 辛口 白ワイン 750ml 単品',
-  'オーストリア グリューナー フェルトリーナー 白ワイン 750ml 単品',
-  '日本ワイン 山梨 甲州 辛口 白ワイン 750ml 単品',
-  '日本ワイン 長野 メルロー 赤ワイン 750ml 単品',
-  '日本ワイン 北海道 ケルナー 白ワイン 750ml 単品',
-  'オレンジワイン 辛口 ナチュラルワイン 750ml 単品'
+  '赤ワイン フルボディ 750ml',
+  '白ワイン 辛口 750ml',
+  'スパークリングワイン 辛口 750ml',
+  'シャンパン 辛口 750ml',
+  'ボルドー 赤ワイン 750ml',
+  'ブルゴーニュ 赤ワイン 750ml',
+  'シャブリ 白ワイン 750ml',
+  'イタリア 赤ワイン バローロ',
+  'キャンティ クラシコ 750ml',
+  'スペイン 赤ワイン 750ml',
+  'チリ 赤ワイン 750ml',
+  '南アフリカ ワイン 750ml',
+  'アルゼンチン マルベック 750ml',
+  'ナパバレー 赤ワイン 750ml',
+  'ニュージーランド 白ワイン 750ml',
+  '日本ワイン 甲州 750ml'
 ];
 
-// === 超拡充ターゲット5: ふるさと納税 スイーツ（洋菓子・和菓子・ショコラ・特産果実） ===
 const SWEETS_KEYWORDS = [
-  'ふるさと納税 ガトーショコラ 濃厚 単品',
-  'ふるさと納税 バスクチーズケーキ 単品',
-  'ふるさと納税 テリーヌショコラ 濃厚 単品',
-  'ふるさと納税 カヌレ 焼菓子 単品',
-  'ふるさと納税 濃厚プリン スイーツ 単品',
-  'ふるさと納税 アップルパイ 手作り 単品',
-  'ふるさと納税 モンブラン 栗 スイーツ 単品',
-  'ふるさと納税 ロールケーキ 濃厚生クリーム 単品',
-  'ふるさと納税 カステラ 極上 単品',
-  'ふるさと納税 和菓子 あんぽ柿 干し柿 特選',
-  'ふるさと納税 市田柿 高級 干し柿 単品',
-  'ふるさと納税 羊羹 栗羊羹 極上 単品',
-  'ふるさと納税 どら焼き 職人手焼き 単品',
-  'ふるさと納税 抹茶 テリーヌ スイーツ 単品',
-  'ふるさと納税 ほうじ茶 スイーツ 濃厚 単品',
-  'ふるさと納税 マカロン パティスリー 単品',
-  'ふるさと納税 フィナンシェ 高級発酵バター 単品',
-  'ふるさと納税 マドレーヌ 焼菓子 単品',
-  'ふるさと納税 バターサンド 濃厚 レーズン 単品',
-  'ふるさと納税 フルーツタルト 産直果実 単品',
-  'ふるさと納税 シフォンケーキ ふわふわ 単品',
-  'ふるさと納税 生キャラメル 濃厚 とろける 単品',
-  'ふるさと納税 高級 クッキー缶 焼菓子 単品',
-  'ふるさと納税 本わらび餅 極上 和菓子 単品',
-  'ふるさと納税 塩大福 職人 和菓子 単品',
-  'ふるさと納税 最中 もなか 高級和菓子 単品'
+  'ふるさと納税 スイーツ 単品',
+  'ふるさと納税 お菓子 単品',
+  'ふるさと納税 ケーキ 単品',
+  'ふるさと納税 チョコレート 単品',
+  'ふるさと納税 ガトーショコラ',
+  'ふるさと納税 チーズケーキ',
+  'ふるさと納税 プリン 濃厚',
+  'ふるさと納税 カヌレ',
+  'ふるさと納税 アップルパイ',
+  'ふるさと納税 モンブラン',
+  'ふるさと納税 カステラ',
+  'ふるさと納税 和菓子 単品',
+  'ふるさと納税 干し柿 あんぽ柿',
+  'ふるさと納税 羊羹',
+  'ふるさと納税 どら焼き',
+  'ふるさと納税 フィナンシェ',
+  'ふるさと納税 クッキー缶'
 ];
 
-// === 超拡充ターゲット6: ふるさと納税 おつまみ（ナッツ・チーズ・燻製・干物・海鮮珍味・肉） ===
 const SNACK_KEYWORDS = [
-  'ふるさと納税 ミックスナッツ 素焼き 無塩 単品',
-  'ふるさと納税 燻製ナッツ スモークナッツ 単品',
-  'ふるさと納税 ピスタチオ 高級 ナッツ 単品',
-  'ふるさと納税 マカダミアナッツ ロースト 単品',
-  'ふるさと納税 熟成チーズ おつまみ 単品',
-  'ふるさと納税 スモークチーズ 桜チップ 単品',
-  'ふるさと納税 カマンベールチーズ 国産 単品',
-  'ふるさと納税 ブルーチーズ 濃厚 おつまみ 単品',
-  'ふるさと納税 カチョカヴァロ 焼きチーズ 単品',
-  'ふるさと納税 お煎餅 職人手焼き 醤油 単品',
-  'ふるさと納税 柿の種 高級 職人 単品',
-  'ふるさと納税 燻製 合鴨 スモーク 単品',
-  'ふるさと納税 牛タン 燻製 スモーク 単品',
-  'ふるさと納税 ホタテ 干物 貝柱 おつまみ 単品',
-  'ふるさと納税 ほたるいか 素干し 珍味 単品',
-  'ふるさと納税 カラスミ 国産 からすみ 単品',
-  'ふるさと納税 明太子 一本物 無着色 単品',
-  'ふるさと納税 馬刺し 赤身 特選 単品',
-  'ふるさと納税 馬刺し 霜降り 極上 単品',
-  'ふるさと納税 ドライフルーツ 無添加 砂糖不使用 単品',
-  'ふるさと納税 ビーフジャーキー 国産牛 単品',
-  'ふるさと納税 ポークジャーキー 燻製 単品',
-  'ふるさと納税 生ハム プロシュート 原木スライス 単品',
-  'ふるさと納税 パテドカンパーニュ シャルキュトリ 単品',
-  'ふるさと納税 地鶏 炭火焼き 宮崎 単品',
-  'ふるさと納税 豚の角煮 とろとろ 単品',
-  'ふるさと納税 ローストビーフ 高級 単品',
-  'ふるさと納税 スモークサーモン 桜チップ 単品',
-  'ふるさと納税 エイヒレ 高級 おつまみ 単品',
-  'ふるさと納税 酒盗 珍味 かつお 単品'
+  'ふるさと納税 おつまみ 単品',
+  'ふるさと納税 ミックスナッツ',
+  'ふるさと納税 燻製 ナッツ',
+  'ふるさと納税 チーズ おつまみ',
+  'ふるさと納税 スモークチーズ',
+  'ふるさと納税 お煎餅 職人',
+  'ふるさと納税 柿の種',
+  'ふるさと納税 燻製 おつまみ',
+  'ふるさと納税 ホタテ 干物',
+  'ふるさと納税 からすみ',
+  'ふるさと納税 明太子 一本物',
+  'ふるさと納税 馬刺し 赤身',
+  'ふるさと納税 ビーフジャーキー',
+  'ふるさと納税 生ハム',
+  'ふるさと納税 地鶏 炭火焼き'
 ];
 
 function getCategoryKeywords(subCategory) {
@@ -419,6 +322,19 @@ function getCategoryKeywords(subCategory) {
     case 'sweets': return SWEETS_KEYWORDS;
     case 'snack': return SNACK_KEYWORDS;
     default: return SAKE_KEYWORDS;
+  }
+}
+
+// サブカテゴリごとの代表フォールバックキーワード（高ヒット率を保証）
+function getFallbackKeyword(subCategory) {
+  switch (subCategory) {
+    case 'sake': return '日本酒 720ml 単品';
+    case 'whisky': return 'ウイスキー 700ml 単品';
+    case 'shochu': return '本格焼酎 720ml 単品';
+    case 'wine': return 'ワイン 750ml 単品';
+    case 'sweets': return 'ふるさと納税 スイーツ 単品';
+    case 'snack': return 'ふるさと納税 おつまみ 単品';
+    default: return '日本酒 720ml';
   }
 }
 
@@ -436,13 +352,9 @@ async function fetchRakutenItemPair(primaryObj) {
     throw new Error('RAKUTEN_APPLICATION_ID または RAKUTEN_ACCESS_KEY が設定されていません。');
   }
 
-  // 楽天API呼び出しヘルパー（ランダムページ・ランダムソートで毎回違う商品群を探索）
-  const searchRakuten = async (kw) => {
-    const randomPage = Math.floor(Math.random() * 3) + 1;
-    const sorts = ['standard', '-itemPrice', '+itemPrice', '-reviewCount', '-updateTimestamp'];
-    const randomSort = sorts[Math.floor(Math.random() * sorts.length)];
-
-    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&page=${randomPage}&sort=${encodeURIComponent(randomSort)}&applicationId=${appId}&accessKey=${accessKey}`;
+  // 楽天API呼び出しヘルパー
+  const searchRakuten = async (kw, page = 1) => {
+    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&page=${page}&applicationId=${appId}&accessKey=${accessKey}`;
     if (affId) url += `&affiliateId=${affId}`;
     try {
       const res = await fetch(url);
@@ -461,40 +373,53 @@ async function fetchRakutenItemPair(primaryObj) {
   let itemA = null;
   let itemB = null;
 
-  console.log(`[比較対決モード] 同種別・同価格帯（価格差±2,000円以内）比較モード (ジャンル: ${subCategory}, 検索キーワード: ${primaryKeyword})`);
-  const rawItems = await searchRakuten(primaryKeyword);
-  const items = rawItems.filter(i => {
-    i.Item.cleanName = cleanProductName(i.Item.itemName);
-    return !isItemAlreadyPosted(i.Item, postedList);
-  });
+  console.log(`[比較対決モード] (ジャンル: ${subCategory}, 検索キーワード: ${primaryKeyword})`);
 
-  // 価格差最大±2,000円以内のペアを探す（ランダムシャッフル）
-  if (items.length >= 2) {
-    const shuffle = items.sort(() => 0.5 - Math.random());
-    for (let i = 0; i < shuffle.length; i++) {
-      const candidateA = shuffle[i].Item;
-      for (let j = i + 1; j < shuffle.length; j++) {
-        const candidateB = shuffle[j].Item;
-        const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
-        if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
-          itemA = candidateA;
-          itemB = candidateB;
-          break;
-        }
-      }
-      if (itemA && itemB) break;
-    }
+  // 1. 指定キーワードで検索
+  let rawItems = await searchRakuten(primaryKeyword, 1);
+  if (rawItems.length < 3) {
+    const rawItemsP2 = await searchRakuten(primaryKeyword, 2);
+    rawItems = [...rawItems, ...rawItemsP2];
   }
 
-  // 同一キーワード内で価格差±2,000円ペアが見つからない場合、同サブジャンル内から補填
+  let items = rawItems.map(i => {
+    i.Item.cleanName = cleanProductName(i.Item.itemName);
+    return i.Item;
+  }).filter(item => !isItemAlreadyPosted(item, postedList));
+
+  // ペア探索ヘルパー（指定した最大許容価格差でペアを検索）
+  const findPairInList = (list, maxDiff = 2000) => {
+    if (!list || list.length < 2) return null;
+    const shuffle = [...list].sort(() => 0.5 - Math.random());
+    for (let i = 0; i < shuffle.length; i++) {
+      const candA = shuffle[i];
+      for (let j = i + 1; j < shuffle.length; j++) {
+        const candB = shuffle[j];
+        const diff = Math.abs(candA.itemPrice - candB.itemPrice);
+        if (diff <= maxDiff && !areItemsTooSimilar(candA, candB)) {
+          return { a: candA, b: candB };
+        }
+      }
+    }
+    return null;
+  };
+
+  // まず±2,000円以内で探す
+  let pair = findPairInList(items, 2000);
+  if (pair) {
+    itemA = pair.a;
+    itemB = pair.b;
+  }
+
+  // 2. キーワードが狭すぎて見つからない場合、同サブジャンル内の別キーワード群から広く収集
   if (!itemA || !itemB) {
-    console.log(`[補填モード] キーワード「${primaryKeyword}」で価格差±2,000円以内のペアが不足のため、同ジャンル「${subCategory}」内から代替検索`);
+    console.log(`[補填モード] キーワード「${primaryKeyword}」で候補不足のため、同ジャンル「${subCategory}」内から広く代替検索`);
     const sameSubPool = getCategoryKeywords(subCategory);
     const altPool = sameSubPool.filter(k => k !== primaryKeyword).sort(() => 0.5 - Math.random());
-    const combinedCandidates = [...items.map(i => i.Item)];
+    const combinedCandidates = [...items];
 
-    for (const altKw of altPool.slice(0, 4)) {
-      const rawAlt = await searchRakuten(altKw);
+    for (const altKw of altPool.slice(0, 5)) {
+      const rawAlt = await searchRakuten(altKw, 1);
       const filteredAlt = rawAlt.map(i => {
         i.Item.cleanName = cleanProductName(i.Item.itemName);
         return i.Item;
@@ -502,25 +427,36 @@ async function fetchRakutenItemPair(primaryObj) {
       combinedCandidates.push(...filteredAlt);
     }
 
-    if (combinedCandidates.length >= 2) {
-      const shuffleComb = combinedCandidates.sort(() => 0.5 - Math.random());
-      for (let i = 0; i < shuffleComb.length; i++) {
-        const candidateA = shuffleComb[i];
-        for (let j = i + 1; j < shuffleComb.length; j++) {
-          const candidateB = shuffleComb[j];
-          const diff = Math.abs(candidateA.itemPrice - candidateB.itemPrice);
-          if (diff <= 2000 && !areItemsTooSimilar(candidateA, candidateB)) {
-            itemA = candidateA;
-            itemB = candidateB;
-            break;
-          }
-        }
-        if (itemA && itemB) break;
+    pair = findPairInList(combinedCandidates, 2000);
+    if (pair) {
+      itemA = pair.a;
+      itemB = pair.b;
+    }
+
+    // 3. それでも見つからない場合、代表フォールバックキーワード（例: 「ふるさと納税 スイーツ 単品」）で確実に収集
+    if (!itemA || !itemB) {
+      const fallbackKw = getFallbackKeyword(subCategory);
+      console.log(`[フォールバック検索] 代表キーワード「${fallbackKw}」で確実にペアを取得します`);
+      const rawFb = await searchRakuten(fallbackKw, 1);
+      const filteredFb = rawFb.map(i => {
+        i.Item.cleanName = cleanProductName(i.Item.itemName);
+        return i.Item;
+      }).filter(item => !isItemAlreadyPosted(item, postedList));
+      combinedCandidates.push(...filteredFb);
+
+      // 許容価格差を段階的に広げて確実にマッチング（2,000円 -> 3,000円）
+      pair = findPairInList(combinedCandidates, 2000) || findPairInList(combinedCandidates, 3000);
+      if (pair) {
+        itemA = pair.a;
+        itemB = pair.b;
       }
     }
   }
 
-  if (!itemA || !itemB) return null;
+  if (!itemA || !itemB) {
+    console.log('[警告] 有効な商品ペアが見つかりませんでした。');
+    return null;
+  }
 
   // JANコード・商品コード・URL・商品名の識別子を永続保存
   savePostedItem(itemA);
@@ -580,7 +516,6 @@ function selectRandomKeyword(excludeList = []) {
   let subCategory = 'sake';
 
   if (rand < 0.50) {
-    // 本格お酒銘柄（日本酒・ウイスキー・焼酎・ワイン）
     category = 'liquor';
     const liquorTypeRand = Math.random();
     if (liquorTypeRand < 0.30) {
@@ -597,7 +532,6 @@ function selectRandomKeyword(excludeList = []) {
       subCategory = 'wine';
     }
   } else {
-    // ふるさと納税（スイーツ or おつまみ）
     category = 'furusato';
     if (Math.random() < 0.5) {
       keywordPool = SWEETS_KEYWORDS;
@@ -679,7 +613,7 @@ ${randomSituation}
 - 正式商品名: ${fullNameB}
 - 略称・通称: ${nameB}
 - 価格/寄付金額: ${priceB}円
-- 価格比較状況: ${isSamePrice ? `【完全同額】どちらも同じ${priceA}円（価格差なし）` : `価格差 約${priceDiff}円（最大2,000円以内の同価格帯）`}
+- 価格比較状況: ${isSamePrice ? `【完全同額】どちらも同じ${priceA}円（価格差なし）` : `価格差 約${priceDiff}円（同価格帯）`}
 - カテゴリ: ${category === 'liquor' ? `本格お酒（${defaultTag}対決）` : `ふるさと納税（${defaultTag}対決）`}
 ==================================================
 
@@ -1151,7 +1085,7 @@ async function main() {
   const itemPair = await fetchRakutenItemPair(randomObj);
 
   if (!itemPair) {
-    console.log('対象商品（同種・同価格帯±2,000円以内のペア）が見つかりませんでした。スキップします。');
+    console.log('対象商品が見つかりませんでした。スキップします。');
     return;
   }
 
