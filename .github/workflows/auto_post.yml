@@ -9,6 +9,8 @@ on:
 jobs:
   auto-post:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: リポジトリのチェックアウト
@@ -18,12 +20,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: 依存パッケージのインストール
         run: npm ci
 
-      - name: Playwrightブラウザのインストール
-        run: npx playwright install --with-deps chromium
+      - name: Playwrightブラウザ（Chromium）のインストール
+        run: npx playwright install chromium
 
       - name: Ameba自動投稿の実行
         env:
@@ -36,3 +39,11 @@ jobs:
           RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
         run: node auto_post.js
+
+      - name: 投稿履歴（posted_items.json / used_keywords.json）の保存・コミット
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add posted_items.json used_keywords.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update posted items and keywords [skip ci]" && git push)
