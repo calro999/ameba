@@ -202,109 +202,103 @@ function areItemsTooSimilar(itemA, itemB) {
   return false;
 }
 
-// === 検索キーワード群: 1000記事以上でも被らない超多彩なジャンル別プール ===
-const SAKE_KEYWORDS = [
-  '日本酒 純米大吟醸 720ml', '日本酒 純米吟醸 720ml', '日本酒 特別純米 720ml',
-  '日本酒 無濾過生原酒 720ml', '日本酒 辛口 720ml', '日本酒 山田錦 720ml',
-  '日本酒 雄町 720ml', '日本酒 美山錦 720ml', '日本酒 五百万石 720ml',
-  '日本酒 山廃 720ml', '日本酒 生酛 720ml', '日本酒 にごり酒 720ml',
-  '日本酒 スパークリング 720ml', '日本酒 熟成古酒 720ml', '日本酒 ひやおろし 720ml',
-  '日本酒 超辛口 720ml', '日本酒 秋田 地酒 720ml', '日本酒 山形 地酒 720ml',
-  '日本酒 青森 地酒 720ml', '日本酒 宮城 地酒 720ml', '日本酒 新潟 地酒 720ml',
-  '日本酒 福島 地酒 720ml', '日本酒 長野 地酒 720ml', '日本酒 石川 地酒 720ml',
-  '日本酒 福井 地酒 720ml', '日本酒 静岡 地酒 720ml', '日本酒 愛知 地酒 720ml',
-  '日本酒 兵庫 灘 地酒 720ml', '日本酒 京都 伏見 地酒 720ml', '日本酒 広島 地酒 720ml',
-  '日本酒 高知 辛口 720ml', '日本酒 山口 地酒 720ml', '日本酒 佐賀 地酒 720ml'
-];
-
-const WHISKY_KEYWORDS = [
-  'ウイスキー シングルモルト 700ml', 'ジャパニーズウイスキー 700ml', 'スコッチウイスキー 700ml',
-  'アイラ ウイスキー 700ml', 'スペイサイド ウイスキー 700ml', 'ハイランド ウイスキー 700ml',
-  'キャンベルタウン ウイスキー 700ml', 'バーボンウイスキー 700ml', 'ライウイスキー 700ml',
-  'シェリーカスク ウイスキー 700ml', 'ピート スモーキー ウイスキー 700ml', 'カスクストレングス ウイスキー',
-  'クラフトウイスキー 700ml', 'アイリッシュウイスキー 700ml', '台湾 カバラン ウイスキー',
-  'インド アムルット ウイスキー', 'ミズナラ樽 ウイスキー', 'ポートカスク ウイスキー'
-];
-
-const SHOCHU_KEYWORDS = [
-  '本格焼酎 芋焼酎 720ml', '本格焼酎 麦焼酎 720ml', '本格焼酎 米焼酎 720ml',
-  '本格焼酎 黒糖焼酎 720ml', '沖縄 泡盛 古酒 720ml', '沖縄 泡盛 カスク 樽貯蔵',
-  '鹿児島 芋焼酎 720ml', '宮崎 芋焼酎 720ml', '大分 麦焼酎 720ml',
-  '壱岐 麦焼酎 720ml', '球磨焼酎 米 720ml', '奄美 黒糖焼酎 720ml',
-  '八丈島 麦焼酎', '樽熟成 麦焼酎 720ml', '焼き芋 焼酎 720ml',
-  '無濾過 芋焼酎 720ml', '前割り 焼酎 720ml', '原酒 焼酎 720ml'
-];
-
-const WINE_KEYWORDS = [
-  '赤ワイン フルボディ 750ml', '赤ワイン ピノノワール 750ml', '赤ワイン カベルネソーヴィニヨン 750ml',
-  '白ワイン 辛口 750ml', '白ワイン シャルドネ 750ml', '白ワイン ソーヴィニヨンブラン 750ml',
-  'スパークリングワイン 辛口 750ml', 'シャンパン 辛口 750ml', 'カヴァ スパークリング 750ml',
-  'プロセッコ 750ml', 'オレンジワイン 750ml', '自然派 ナチュール ワイン 750ml',
-  'ボルドー 赤ワイン 750ml', 'ブルゴーニュ 赤ワイン 750ml', 'シャブリ 白ワイン 750ml',
-  'イタリア 赤ワイン バローロ', 'キャンティ クラシコ 750ml', 'スペイン 赤ワイン リオハ 750ml',
-  'チリ 赤ワイン 750ml', '南アフリカ ワイン 750ml', 'アルゼンチン マルベック 750ml',
-  'ナパバレー 赤ワイン 750ml', 'ニュージーランド 白ワイン 750ml', '日本ワイン 甲州 750ml',
-  '日本ワイン マスカットベーリーA 750ml'
-];
-
-const CRAFT_BEER_GIN_KEYWORDS = [
-  'クラフトビール IPA 単品', 'クラフトビール スタウト 単品', 'クラフトビール ヴァイツェン',
-  'クラフトジン 国産 700ml', 'ジャパニーズ クラフトジン 700ml', 'クラフトジン スパイス 700ml'
-];
-
-const SWEETS_KEYWORDS = [
-  'ふるさと納税 スイーツ 単品', 'ふるさと納税 お菓子 単品', 'ふるさと納税 ケーキ 単品',
-  'ふるさと納税 チョコレート 単品', 'ふるさと納税 ガトーショコラ', 'ふるさと納税 チーズケーキ',
-  'ふるさと納税 プリン 濃厚', 'ふるさと納税 カヌレ', 'ふるさと納税 アップルパイ',
-  'ふるさと納税 モンブラン', 'ふるさと納税 カステラ', 'ふるさと納税 和菓子 単品',
-  'ふるさと納税 干し柿 あんぽ柿', 'ふるさと納税 羊羹', 'ふるさと納税 どら焼き',
-  'ふるさと納税 フィナンシェ', 'ふるさと納税 クッキー缶', 'ふるさと納税 バウムクーヘン',
-  'ふるさと納税 ジェラート アイス 単品', 'ふるさと納税 大福 フルーツ大福'
-];
-
-const SNACK_KEYWORDS = [
-  'ふるさと納税 おつまみ 単品', 'ふるさと納税 ミックスナッツ', 'ふるさと納税 燻製 ナッツ',
-  'ふるさと納税 チーズ おつまみ', 'ふるさと納税 スモークチーズ', 'ふるさと納税 お煎餅 職人',
-  'ふるさと納税 柿の種', 'ふるさと納税 燻製 おつまみ', 'ふるさと納税 ホタテ 干物',
-  'ふるさと納税 からすみ', 'ふるさと納税 明太子 一本物', 'ふるさと納税 馬刺し 赤身',
-  'ふるさと納税 ビーフジャーキー', 'ふるさと納税 生ハム 原木 切り落とし', 'ふるさと納税 地鶏 炭火焼き',
-  'ふるさと納税 牛タン 仙台 塩仕込み', 'ふるさと納税 豚の角煮 ラフテー', 'ふるさと納税 鰻 蒲焼 1尾',
-  'ふるさと納税 燻製 牡蠣 オイル漬け', 'ふるさと納税 ローストビーフ ブロック'
-];
-
-function getCategoryKeywords(subCategory) {
-  switch (subCategory) {
-    case 'sake': return SAKE_KEYWORDS;
-    case 'whisky': return WHISKY_KEYWORDS;
-    case 'shochu': return SHOCHU_KEYWORDS;
-    case 'wine': return WINE_KEYWORDS;
-    case 'craft': return CRAFT_BEER_GIN_KEYWORDS;
-    case 'sweets': return SWEETS_KEYWORDS;
-    case 'snack': return SNACK_KEYWORDS;
-    default: return SAKE_KEYWORDS;
+// === テーマ別お菓子・おつまみ検索キーワード群（お菓子ベースの家飲みペアリング） ===
+const SNACK_THEMES = [
+  {
+    themeId: 'salty_crunchy',
+    themeName: '塩気と香ばしさがたまらない煎餅・米菓・スナック',
+    alcoholCategory: 'shochu_beer',
+    alcoholName: 'キレのある麦焼酎ロックや炭酸割り、辛口ハイボール',
+    snackKeywords: [
+      'ふるさと納税 お煎餅 職人 手焼き', 'ふるさと納税 柿の種 高級 専門店', 'ふるさと納税 あられ おかき 詰め合わせなし',
+      'ふるさと納税 ポテトチップス クラフト', 'ふるさと納税 揚げせんべい 無添加', 'ふるさと納税 枝豆 スナック フリーズドライ',
+      'ふるさと納税 そら豆 揚げ 菓子 塩', 'ふるさと納税 ごぼうチップス 国産', 'ふるさと納税 イカ天 瀬戸内レモン',
+      'ふるさと納税 カレー せんべい 濃厚', 'ふるさと納税 エビせんべい 海老 濃厚', 'ふるさと納税 パスタスナック 揚げパスタ'
+    ],
+    alcoholKeywords: [
+      '本格焼酎 麦焼酎 720ml', '壱岐 麦焼酎 720ml', '大分 麦焼酎 720ml', 'ウイスキー ハイボール 700ml',
+      'ジャパニーズ クラフトジン 700ml', '本格焼酎 米焼酎 720ml'
+    ]
+  },
+  {
+    themeId: 'chocolate_cacao',
+    themeName: 'カカオ香る濃厚チョコレート・ビタースイーツ',
+    alcoholCategory: 'whisky_brandy',
+    alcoholName: 'スモーキーなアイラウイスキーや重厚なシェリー樽モルト',
+    snackKeywords: [
+      'ふるさと納税 ガトーショコラ 濃厚', 'ふるさと納税 チョコレート ビター 単品', 'ふるさと納税 生チョコレート カカオ',
+      'ふるさと納税 テリーヌショコラ 濃厚', 'ふるさと納税 オランジェット オレンジピール チョコ', 'ふるさと納税 チョコブラウニー 濃厚',
+      'ふるさと納税 割れチョコ ハイカカオ', 'ふるさと納税 ボンボンショコラ 高級', 'ふるさと納税 フォンダンショコラ'
+    ],
+    alcoholKeywords: [
+      'ウイスキー シングルモルト 700ml', 'アイラ ウイスキー 700ml', 'シェリーカスク ウイスキー 700ml',
+      'スコッチウイスキー 700ml', 'ポートカスク ウイスキー', '本格焼酎 黒糖焼酎 720ml'
+    ]
+  },
+  {
+    themeId: 'cheese_baked',
+    themeName: 'コク深いチーズケーキ・チーズ焼き菓子',
+    alcoholCategory: 'wine_whisky',
+    alcoholName: '樽香の効いた白ワイン（シャルドネ）や重口赤ワイン',
+    snackKeywords: [
+      'ふるさと納税 バスクチーズケーキ 濃厚', 'ふるさと納税 チーズテリーヌ', 'ふるさと納税 ベイクドチーズケーキ 熟成',
+      'ふるさと納税 チーズ クッキー 塩気', 'ふるさと納税 チーズ サブレ 濃厚', 'ふるさと納税 ゴルゴンゾーラ チーズケーキ',
+      'ふるさと納税 チーズタルト 濃厚', 'ふるさと納税 カマンベール チーズケーキ', 'ふるさと納税 パルミジャーノ 焼き菓子'
+    ],
+    alcoholKeywords: [
+      '白ワイン シャルドネ 750ml', '赤ワイン フルボディ 750ml', '赤ワイン ピノノワール 750ml',
+      '白ワイン 辛口 750ml', 'スパークリングワイン 辛口 750ml', '日本ワイン 甲州 750ml'
+    ]
+  },
+  {
+    themeId: 'baked_butter',
+    themeName: '焦がしバター香るフィナンシェ・洋焼き菓子',
+    alcoholCategory: 'bourbon_brandy',
+    alcoholName: 'バニラ香あふれるバーボンやフルーティーなスペイサイドモルト',
+    snackKeywords: [
+      'ふるさと納税 フィナンシェ 発酵バター', 'ふるさと納税 カヌレ フランス 焼き菓子', 'ふるさと納税 マドレーヌ 濃厚 バター',
+      'ふるさと納税 ガレットブルトンヌ バター', 'ふるさと納税 パウンドケーキ フルーツ', 'ふるさと納税 フロランタン アーモンド',
+      'ふるさと納税 クッキー缶 職人 バター', 'ふるさと納税 アップルパイ シナモン', 'ふるさと納税 レモンケーキ ピール'
+    ],
+    alcoholKeywords: [
+      'バーボンウイスキー 700ml', 'スペイサイド ウイスキー 700ml', 'ハイランド ウイスキー 700ml',
+      'ミズナラ樽 ウイスキー 700ml', 'ライウイスキー 700ml', 'アイリッシュウイスキー 700ml'
+    ]
+  },
+  {
+    themeId: 'wagashi_anko',
+    themeName: '上品な甘みとコクの和菓子・栗・干し柿',
+    alcoholCategory: 'sake_shochu',
+    alcoholName: '熟成古酒泡盛、旨味の強い山廃純米酒、濃厚な芋焼酎',
+    snackKeywords: [
+      'ふるさと納税 干し柿 あんぽ柿', 'ふるさと納税 羊羹 栗 濃厚', 'ふるさと納税 どら焼き 粒あん',
+      'ふるさと納税 かりんとう 黒糖 高級', 'ふるさと納税 芋けんぴ 塩', 'ふるさと納税 栗きんとん 国産栗',
+      'ふるさと納税 最中 粒あん 職人', 'ふるさと納税 大福 塩大福 豆大福', 'ふるさと納税 カステラ 熟成'
+    ],
+    alcoholKeywords: [
+      '日本酒 山廃 720ml', '日本酒 生酛 720ml', '沖縄 泡盛 古酒 720ml',
+      '本格焼酎 芋焼酎 720ml', '本格焼酎 黒糖焼酎 720ml', '日本酒 熟成古酒 720ml'
+    ]
+  },
+  {
+    themeId: 'nuts_driedfruit',
+    themeName: '素材そのままの素焼きナッツ・燻製・ドライフルーツ',
+    alcoholCategory: 'whisky_gin',
+    alcoholName: 'ロックで愉しむスコッチウイスキーや香り高いクラフトジン',
+    snackKeywords: [
+      'ふるさと納税 ミックスナッツ 無塩 素焼き', 'ふるさと納税 燻製 ナッツ ピート', 'ふるさと納税 マカダミアナッツ 殻付き',
+      'ふるさと納税 ピスタチオ ロースト 塩', 'ふるさと納税 ドライフルーツ 砂糖不使用', 'ふるさと納税 無花果 イチジク ドライフルーツ',
+      'ふるさと納税 カシューナッツ ロースト', 'ふるさと納税 燻製 ピスタチオ', 'ふるさと納税 デーツ ドライフルーツ'
+    ],
+    alcoholKeywords: [
+      'ウイスキー シングルモルト 700ml', 'ジャパニーズ クラフトジン 700ml', 'スコッチウイスキー 700ml',
+      'アイラ ウイスキー 700ml', 'キャンベルタウン ウイスキー 700ml', '本格焼酎 麦焼酎 720ml'
+    ]
   }
-}
+];
 
-// サブカテゴリごとの代表フォールバックキーワード
-function getFallbackKeyword(subCategory) {
-  switch (subCategory) {
-    case 'sake': return '日本酒 720ml 単品';
-    case 'whisky': return 'ウイスキー 700ml 単品';
-    case 'shochu': return '本格焼酎 720ml 単品';
-    case 'wine': return 'ワイン 750ml 単品';
-    case 'craft': return 'クラフトジン 700ml';
-    case 'sweets': return 'ふるさと納税 スイーツ 単品';
-    case 'snack': return 'ふるさと納税 おつまみ 単品';
-    default: return '日本酒 720ml';
-  }
-}
-
-// 1. 楽天APIから2つのメイン商品情報（比較用）を取得
-async function fetchRakutenItemPair(primaryObj) {
-  const primaryKeyword = typeof primaryObj === 'object' ? primaryObj.keyword : primaryObj;
-  const category = typeof primaryObj === 'object' ? primaryObj.category : 'liquor';
-  const subCategory = typeof primaryObj === 'object' ? primaryObj.subCategory : 'sake';
-
+// 楽天API呼び出しヘルパー（単体キーワード）
+async function searchRakutenItems(kw, count = 15) {
   const appId = process.env.RAKUTEN_APPLICATION_ID;
   const affId = process.env.RAKUTEN_AFFILIATE_ID;
   const accessKey = process.env.RAKUTEN_ACCESS_KEY;
@@ -313,133 +307,22 @@ async function fetchRakutenItemPair(primaryObj) {
     throw new Error('RAKUTEN_APPLICATION_ID または RAKUTEN_ACCESS_KEY が設定されていません。');
   }
 
-  // 楽天API呼び出しヘルパー
-  const searchRakuten = async (kw, page = 1) => {
-    let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=30&page=${page}&applicationId=${appId}&accessKey=${accessKey}`;
-    if (affId) url += `&affiliateId=${affId}`;
-    try {
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json && json.Items && json.Items.length > 0) {
-        return json.Items.filter(i => isMainProduct(i.Item));
-      }
-    } catch (e) {
-      console.log(`[Rakuten API エラー (${kw})]:`, e.message);
+  let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=${count}&page=1&applicationId=${appId}&accessKey=${accessKey}`;
+  if (affId) url += `&affiliateId=${affId}`;
+
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json && json.Items && json.Items.length > 0) {
+      return json.Items.map(i => i.Item).filter(i => isMainProduct(i));
     }
-    return [];
-  };
-
-  const postedList = getPostedItems();
-
-  let itemA = null;
-  let itemB = null;
-
-  console.log(`[比較対決モード] (ジャンル: ${subCategory}, 検索キーワード: ${primaryKeyword})`);
-
-  let rawItems = await searchRakuten(primaryKeyword, 1);
-  if (rawItems.length < 3) {
-    const rawItemsP2 = await searchRakuten(primaryKeyword, 2);
-    rawItems = [...rawItems, ...rawItemsP2];
+  } catch (e) {
+    console.log(`[Rakuten API エラー (${kw})]:`, e.message);
   }
-
-  let items = rawItems.map(i => {
-    i.Item.cleanName = cleanProductName(i.Item.itemName);
-    return i.Item;
-  }).filter(item => !isItemAlreadyPosted(item, postedList));
-
-  const findPairInList = (list, maxDiff = 2000) => {
-    if (!list || list.length < 2) return null;
-    const shuffle = [...list].sort(() => 0.5 - Math.random());
-    for (let i = 0; i < shuffle.length; i++) {
-      const candA = shuffle[i];
-      for (let j = i + 1; j < shuffle.length; j++) {
-        const candB = shuffle[j];
-        const diff = Math.abs(candA.itemPrice - candB.itemPrice);
-        if (diff <= maxDiff && !areItemsTooSimilar(candA, candB)) {
-          return { a: candA, b: candB };
-        }
-      }
-    }
-    return null;
-  };
-
-  let pair = findPairInList(items, 2000);
-  if (pair) {
-    itemA = pair.a;
-    itemB = pair.b;
-  }
-
-  if (!itemA || !itemB) {
-    console.log(`[補填モード] キーワード「${primaryKeyword}」で候補不足のため、同ジャンル「${subCategory}」内から広く代替検索`);
-    const sameSubPool = getCategoryKeywords(subCategory);
-    const altPool = sameSubPool.filter(k => k !== primaryKeyword).sort(() => 0.5 - Math.random());
-    const combinedCandidates = [...items];
-
-    for (const altKw of altPool.slice(0, 5)) {
-      const rawAlt = await searchRakuten(altKw, 1);
-      const filteredAlt = rawAlt.map(i => {
-        i.Item.cleanName = cleanProductName(i.Item.itemName);
-        return i.Item;
-      }).filter(item => !isItemAlreadyPosted(item, postedList));
-      combinedCandidates.push(...filteredAlt);
-    }
-
-    pair = findPairInList(combinedCandidates, 2000);
-    if (pair) {
-      itemA = pair.a;
-      itemB = pair.b;
-    }
-
-    if (!itemA || !itemB) {
-      const fallbackKw = getFallbackKeyword(subCategory);
-      console.log(`[フォールバック検索] 代表キーワード「${fallbackKw}」で確実にペアを取得します`);
-      const rawFb = await searchRakuten(fallbackKw, 1);
-      const filteredFb = rawFb.map(i => {
-        i.Item.cleanName = cleanProductName(i.Item.itemName);
-        return i.Item;
-      }).filter(item => !isItemAlreadyPosted(item, postedList));
-      combinedCandidates.push(...filteredFb);
-
-      pair = findPairInList(combinedCandidates, 2000) || findPairInList(combinedCandidates, 3000);
-      if (pair) {
-        itemA = pair.a;
-        itemB = pair.b;
-      }
-    }
-  }
-
-  if (!itemA || !itemB) {
-    console.log('[警告] 有効な商品ペアが見つかりませんでした。');
-    return null;
-  }
-
-  savePostedItem(itemA);
-  savePostedItem(itemB);
-
-  const finalDiff = Math.abs(itemA.itemPrice - itemB.itemPrice);
-  console.log(`[比較対決設定確定] [ジャンル:${subCategory}] 商品A: ${cleanProductName(itemA.itemName)} (${itemA.itemPrice}円) VS 商品B: ${cleanProductName(itemB.itemName)} (${itemB.itemPrice}円) [価格差: ${finalDiff}円]`);
-
-  return {
-    category,
-    subCategory,
-    itemA: {
-      itemName: itemA.itemName,
-      cleanName: cleanProductName(itemA.itemName),
-      itemUrl: itemA.affiliateUrl || itemA.itemUrl,
-      imageUrl: itemA.mediumImageUrls?.[0]?.imageUrl || itemA.mediumImageUrls?.[0] || '',
-      price: itemA.itemPrice
-    },
-    itemB: {
-      itemName: itemB.itemName,
-      cleanName: cleanProductName(itemB.itemName),
-      itemUrl: itemB.affiliateUrl || itemB.itemUrl,
-      imageUrl: itemB.mediumImageUrls?.[0]?.imageUrl || itemB.mediumImageUrls?.[0] || '',
-      price: itemB.itemPrice
-    }
-  };
+  return [];
 }
 
-// 投稿済みキーワードの記録・読み込み（連打を防止）
+// 投稿済みキーワードの記録・読み込み（テーマやキーワードの連続重複を防止）
 function getUsedKeywords() {
   const filePath = './used_keywords.json';
   if (fs.existsSync(filePath)) {
@@ -459,149 +342,158 @@ function saveUsedKeyword(keyword) {
   fs.writeFileSync('./used_keywords.json', JSON.stringify(used, null, 2));
 }
 
-function selectRandomKeyword(excludeList = []) {
+// 3〜4つの独立したおつまみ ＋ 1つの相棒となるお酒を楽天APIから取得
+async function fetchSnackAndAlcoholGroup() {
   const usedKeywords = getUsedKeywords();
-  
-  const rand = Math.random();
-  let keywordPool = [];
-  let category = 'liquor';
-  let subCategory = 'sake';
+  const postedList = getPostedItems();
 
-  if (rand < 0.50) {
-    category = 'liquor';
-    const liquorTypeRand = Math.random();
-    if (liquorTypeRand < 0.25) {
-      keywordPool = SAKE_KEYWORDS;
-      subCategory = 'sake';
-    } else if (liquorTypeRand < 0.50) {
-      keywordPool = WHISKY_KEYWORDS;
-      subCategory = 'whisky';
-    } else if (liquorTypeRand < 0.70) {
-      keywordPool = SHOCHU_KEYWORDS;
-      subCategory = 'shochu';
-    } else if (liquorTypeRand < 0.90) {
-      keywordPool = WINE_KEYWORDS;
-      subCategory = 'wine';
-    } else {
-      keywordPool = CRAFT_BEER_GIN_KEYWORDS;
-      subCategory = 'craft';
-    }
-  } else {
-    category = 'furusato';
-    if (Math.random() < 0.4) {
-      keywordPool = SWEETS_KEYWORDS;
-      subCategory = 'sweets';
-    } else {
-      keywordPool = SNACK_KEYWORDS;
-      subCategory = 'snack';
+  // 1. テーマをランダム選定（直近で使われていないテーマを優先）
+  const theme = SNACK_THEMES[Math.floor(Math.random() * SNACK_THEMES.length)];
+  console.log(`[選定テーマ]: ${theme.themeName} (想定酒: ${theme.alcoholName})`);
+
+  // 2. おつまみキーワードをシャッフルして3〜4商品を取得
+  const shuffledSnackKws = [...theme.snackKeywords].sort(() => 0.5 - Math.random());
+  const selectedSnacks = [];
+
+  for (const kw of shuffledSnackKws) {
+    if (selectedSnacks.length >= 3) break;
+    const items = await searchRakutenItems(kw, 15);
+    for (const raw of items) {
+      raw.cleanName = cleanProductName(raw.itemName);
+      if (!isItemAlreadyPosted(raw, postedList) && !selectedSnacks.some(s => areItemsTooSimilar(s, raw))) {
+        selectedSnacks.push(raw);
+        savePostedItem(raw);
+        saveUsedKeyword(kw);
+        break;
+      }
     }
   }
 
-  const available = keywordPool.filter(k => !usedKeywords.includes(k) && !excludeList.includes(k));
-  const pool = available.length > 0 ? available : keywordPool.filter(k => !excludeList.includes(k));
-  const chosen = pool[Math.floor(Math.random() * pool.length)] || keywordPool[0];
-  saveUsedKeyword(chosen);
-  return { keyword: chosen, category, subCategory };
+  // もし3つ未満なら、他テーマのキーワードからも補填
+  if (selectedSnacks.length < 3) {
+    console.log('[補填] おつまみ候補が足りないため他テーマから追加探索...');
+    const allSnackKws = SNACK_THEMES.flatMap(t => t.snackKeywords).sort(() => 0.5 - Math.random());
+    for (const kw of allSnackKws) {
+      if (selectedSnacks.length >= 3) break;
+      const items = await searchRakutenItems(kw, 10);
+      for (const raw of items) {
+        raw.cleanName = cleanProductName(raw.itemName);
+        if (!isItemAlreadyPosted(raw, postedList) && !selectedSnacks.some(s => areItemsTooSimilar(s, raw))) {
+          selectedSnacks.push(raw);
+          savePostedItem(raw);
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. このおつまみ達に合わせる「お酒」を1本取得
+  const shuffledAlcKws = [...theme.alcoholKeywords].sort(() => 0.5 - Math.random());
+  let selectedAlcohol = null;
+
+  for (const kw of shuffledAlcKws) {
+    const alcItems = await searchRakutenItems(kw, 15);
+    for (const raw of alcItems) {
+      raw.cleanName = cleanProductName(raw.itemName);
+      if (!isItemAlreadyPosted(raw, postedList)) {
+        selectedAlcohol = raw;
+        savePostedItem(raw);
+        saveUsedKeyword(kw);
+        break;
+      }
+    }
+    if (selectedAlcohol) break;
+  }
+
+  // お酒が見つからない場合のフォールバック
+  if (!selectedAlcohol) {
+    const fbItems = await searchRakutenItems('ウイスキー シングルモルト 700ml', 10);
+    if (fbItems.length > 0) {
+      selectedAlcohol = fbItems[0];
+      selectedAlcohol.cleanName = cleanProductName(selectedAlcohol.itemName);
+    }
+  }
+
+  if (selectedSnacks.length < 2 || !selectedAlcohol) {
+    console.log('[警告] 充分な商品グループが取得できませんでした。');
+    return null;
+  }
+
+  console.log(`[商品グループ確定] おつまみ ${selectedSnacks.length}品 ＆ お酒 1品`);
+  selectedSnacks.forEach((s, idx) => console.log(`  おつまみ${idx + 1}: ${s.cleanName} (${s.itemPrice}円)`));
+  console.log(`  相棒のお酒: ${selectedAlcohol.cleanName} (${selectedAlcohol.itemPrice}円)`);
+
+  return {
+    theme,
+    snacks: selectedSnacks.map(s => ({
+      itemName: s.itemName,
+      cleanName: s.cleanName,
+      itemUrl: s.affiliateUrl || s.itemUrl,
+      imageUrl: s.mediumImageUrls?.[0]?.imageUrl || s.mediumImageUrls?.[0] || '',
+      price: s.itemPrice
+    })),
+    alcohol: {
+      itemName: selectedAlcohol.itemName,
+      cleanName: selectedAlcohol.cleanName,
+      itemUrl: selectedAlcohol.affiliateUrl || selectedAlcohol.itemUrl,
+      imageUrl: selectedAlcohol.mediumImageUrls?.[0]?.imageUrl || selectedAlcohol.mediumImageUrls?.[0] || '',
+      price: selectedAlcohol.itemPrice
+    }
+  };
 }
 
-// 具体的でリアルな晩酌シーン・食卓・おつまみ準備の導入シード（超多彩・時間軸破綻ゼロ）
+// 具体的でリアルな「仕事終わりの部屋・おつまみ×お酒探訪」冒頭シード（超多彩バリエーション）
 const SITUATION_SEEDS = [
-  {
-    type: 'pairing_test',
-    text: '今日は仕事帰りにスーパーで脂の乗ったサーモンの刺身をサクッと買って帰宅。手持ちのお酒と合わせようと思ったけれど、この濃厚な脂にドンピシャで合う最高の一杯を改めて常備しておきたくなって、晩酌しながら真剣に探している。'
-  },
-  {
-    type: 'pairing_test',
-    text: '冷蔵庫の豚バラともやしを塩昆布とごま油でササッと炒めただけの超ズボラ手料理。こういうパンチのあるアテを流し込むのに、キレ味抜群の相棒を新しく迎え入れたくなった。'
-  },
-  {
-    type: 'furusato_plan',
-    text: '今年のふるさと納税の控除枠をチェック中。毎日の晩酌のクオリティを劇的に引き上げてくれる極上のおつまみ（またはお酒）を1つだけ厳選してポチりたい。'
-  },
-  {
-    type: 'home_bar_upgrade',
-    text: '普段のデイリー晩酌用とは別に、休日の前夜に照明を少し落としてちびちび長く楽しめる「ちょっと良いご褒美ボトル」を1本ストックしておきたくて物色中。'
-  },
-  {
-    type: 'craving_rebirth',
-    text: '今夜は手頃なハイボールを飲みながら居酒屋メニューを作っていたら、ふと「あぁ、ここは本物の熟成香や樽香があるやつを合わせるべきだった…」と欲が出てしまい、次回の晩酌用に本気で候補を絞り込んでいる。'
-  },
-  {
-    type: 'snack_matching',
-    text: 'カマンベールチーズに黒胡椒とオリーブオイルをかけただけの即席つまみ。これをつつきながら、この濃厚なコクと塩気に負けない深みのある1本を探している。'
-  },
-  {
-    type: 'weekend_reward',
-    text: '今週もお疲れ様ということで、次の週末にじっくり味わうための特別な1本（または贅沢なアテ）を今から手配しておきたい。'
-  },
-  {
-    type: 'deep_dive',
-    text: '普段何気なく飲んでいるけれど、ふとお酒の製法や産地ごとの違いを深掘りしてみたくなり、スペックや造りのこだわりを見比べていたらどうしても決めきれなくなった。'
-  },
-  {
-    type: 'light_snack_night',
-    text: '今日は洗い物も面倒なので、ミックスナッツとドライフルーツを小皿に出しただけの静かな夜。こういう乾き物をつまみながら、じっくり向き合える奥深い1本を探している。'
-  },
-  {
-    type: 'meat_craving',
-    text: '近所の精肉店で買った赤身の肉をシンプルに塩コショウで焼く予定。この肉汁と旨味をガツンと受け止めてくれる力強い相棒をネットで真剣に見比べている。'
-  }
+  '仕事の後に美味しいものと美味しいお酒の組み合わせは格別ですよね。最近は一人きりの部屋で晩酌しながら、ネットで美味しそうなおつまみとお酒を探すことに静かにハマっています。今夜は無性に「塩気のきいた香ばしいアテ」が欲しくなって、画面とにらめっこ中。',
+  '今日も長い一日が終わって、誰もいない部屋でプシュッと缶を開ける瞬間。やっぱり仕事終わりの晩酌には、噛めば噛むほど味が出るようなジューシーな肉や燻製が欲しくなる。それに負けないパンチのあるお酒は何がいいか、一人で真剣に妄想しています。',
+  '仕事帰りのスーパーで適当な惣菜をつまみつつ、ふと「もっと至福の組み合わせはないものか」と欲が出てしまった夜。濃厚なチーズ系のアテをいくつか候補に並べながら、これに合わせるなら重口の赤か、それとも樽香のあるウイスキーか…と贅沢な悩みに没頭しています。',
+  '平日の夜、静まり返った部屋。仕事終わりの疲れた体に染み渡るような、海の幸の凝縮された旨味が恋しくなりました。珍味系の極上おつまみを物色しつつ、合わせるならキリッと冷やした日本酒か辛口白ワインか、一人きりの居酒屋会議が止まりません。',
+  '仕事を終えて部屋の明かりを少し落とし、自分への小さなご褒美時間。甘さ控えめのビターなチョコや香ばしい燻製ナッツをつまみながら、ロックでちびちびやれる銘酒との組み合わせを夜な夜な探訪しています。'
 ];
 
-// 2. AIで2商品比較型記事の本文・タイトル・ハッシュタグを生成
-async function generateArticlePair(itemPair) {
+// 2. AIでおつまみ3〜4選 ＋ 合わせるお酒のペアリング悩む記事を生成
+async function generateArticleGroup(itemGroup) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   const profileContent = getProfileData();
 
-  const fullNameA = itemPair.itemA.itemName;
-  const fullNameB = itemPair.itemB.itemName;
-  const priceANum = itemPair.itemA.price;
-  const priceBNum = itemPair.itemB.price;
-  const priceA = priceANum.toLocaleString();
-  const priceB = priceBNum.toLocaleString();
+  const theme = itemGroup.theme;
+  const snacks = itemGroup.snacks;
+  const alcohol = itemGroup.alcohol;
 
-  const nameA = itemPair.itemA.cleanName || fullNameA.slice(0, 18);
-  const nameB = itemPair.itemB.cleanName || fullNameB.slice(0, 18);
+  const situation = SITUATION_SEEDS[Math.floor(Math.random() * SITUATION_SEEDS.length)];
 
-  const priceDiffNum = Math.abs(priceANum - priceBNum);
-  const priceDiff = priceDiffNum.toLocaleString();
-  const isSamePrice = priceDiffNum === 0;
+  // おつまみリストの文字列構築（正規商品名＋価格＋クリーン略称）
+  const snackListText = snacks.map((s, i) => {
+    return `【候補${i + 1}】
+- 楽天市場での正式商品名（検索用）: ${s.itemName}
+- 略称・特徴: ${s.cleanName}
+- 寄付金額/価格: ${s.price.toLocaleString()}円`;
+  }).join('\n\n');
 
-  const category = itemPair.category || 'liquor';
-  const subCategory = itemPair.subCategory || 'sake';
-
-  const defaultTag = subCategory === 'sake' ? '日本酒' :
-                     subCategory === 'whisky' ? 'ウイスキー' :
-                     subCategory === 'shochu' ? '焼酎' :
-                     subCategory === 'wine' ? 'ワイン' :
-                     subCategory === 'craft' ? 'クラフト酒' :
-                     subCategory === 'sweets' ? 'スイーツ' : 'おつまみ';
-
-  const situationObj = SITUATION_SEEDS[Math.floor(Math.random() * SITUATION_SEEDS.length)];
-  const randomSituation = situationObj.text;
+  const alcoholText = `- 楽天市場での正式商品名（検索用）: ${alcohol.itemName}
+- 略称・銘柄名: ${alcohol.cleanName}
+- 価格/寄付金額: ${alcohol.price.toLocaleString()}円
+- お酒の方向性: ${theme.alcoholName}`;
 
   const prompt = `
-以下の【プロフィール設定】と【比較する2つの商品情報】を基に、Amebaブログ用の「一人きりの部屋で本気で迷っている個人ブログ記事」を作成してください。
+以下の【プロフィール設定】と【今夜のテーマ・おつまみ候補とお酒情報】を基に、Amebaブログ用の「一人きりの部屋でおつまみ選びとお酒のペアリングに本気で頭を抱える個人ブログ記事」を作成してください。
 
 ==================================================
 【プロフィール設定】
 ${profileContent}
 
-【今夜の具体的な晩酌シチュエーション（着想源）】
-${randomSituation}
+【今夜の具体的な晩酌シチュエーション・冒頭の着想源】
+${situation}
 
-【商品A情報】
-- 楽天市場での正式商品名（検索用）: ${fullNameA}
-- 略称・通称: ${nameA}
-- 価格/寄付金額: ${priceA}円
+【今夜のテーマ】
+${theme.themeName}
 
-【商品B情報】
-- 楽天市場での正式商品名（検索用）: ${fullNameB}
-- 略称・通称: ${nameB}
-- 価格/寄付金額: ${priceB}円
-- 価格状況: ${isSamePrice ? `【完全同額】どちらも同じ${priceA}円` : `価格差 約${priceDiff}円（ほぼ同価格帯）`}
-- カテゴリ: ${category === 'liquor' ? `本格お酒（${defaultTag}対決）` : `ふるさと納税（${defaultTag}対決）`}
+【厳選したおつまみ候補（3品）】
+${snackListText}
+
+【合わせたい相棒のお酒（1品）】
+${alcoholText}
 ==================================================
 
 【最重要！投稿者ペルソナと記事のスタンス】
@@ -609,91 +501,77 @@ ${randomSituation}
 - **ペルソナ**: 30代独身男性。少し根暗で物静か。休日の予定もなく、部屋で一人ちびちび酒を飲むのが唯一の癒やし。
 - **トーン＆マナー**: 静かな夜の独白、ちょっと自虐的で寂しげな空気感。
 - ❌ **元気すぎる挨拶（「お疲れ様でした！」「おうち晩酌部です！」「〜部です！」など）は絶対に禁止！**
-- 「今日も一人きりの部屋で、誰とも話さずグラスを傾けている」「休日に特に予定もない自分の、ささやかすぎる贅沢」といったリアルで静かな独白のトーン。
-- 「おすすめはこちら！」といったアフィリエイト臭全開の量産記事は絶対に作らないでください。
-- すべての文章や見出しを、使い回しテンプレートではなく**今回の2商品・今夜のシチュエーションに完全に特化したオリジナルな言葉**で執筆してください。
+- 「仕事が終わって静まり返った部屋。缶をプシュッと開けて、美味しいおつまみとお酒の組み合わせを探す時間が唯一の救い…」というリアルな孤独感と晩酌への強い情熱。
+- 「おすすめはこちら！」「ランキングまとめ！」といったアフィリエイト臭全開の量産記事は絶対に作らないでください。
+- すべての文章や見出しを、使い回しテンプレートではなく**今回のテーマ・候補商品に特化したオリジナルの言葉**で執筆してください。
 
 --------------------------------------------------
 【絶対に守るべき必須要素】
 
-1. **時間軸のリアリティと静かな冒頭（超重要）**:
-   - 定型文（「最近〜を飲み比べてみたくて…」等）は禁止！
-   - 「今夜食べるために今ネット注文する」といった時間軸の破綻は絶対に避けること。「手頃なアテで一人静かに飲みながら、次回用の本気ボトルを物色している」「ふるさと納税の枠を一人で延々と吟味している」など、自然な動機から始めてください。
+1. **情景が目に浮かぶ冒頭（超重要）**:
+   - 「仕事の後に美味しいものと美味しいお酒の組み合わせは格別ですよね。最近は一人きりの部屋で晩酌しながら、ネットで美味しそうなお菓子やおつまみ、そしてお酒を探すことに静かにハマっています」といった自然な導入からスタート。
+   - 「今夜は無性に『${theme.themeName}』が欲しくなり、画面にかじりついて候補を絞り込んでいる…」と繋げる。
 
-2. **楽天検索用の正式商品名と自然な略称のルール（最重要）**:
-   - 後からリンクを差し替えやすくするため、**商品Aのセクション冒頭で1回だけ【楽天市場での正式商品名】『${fullNameA}』を記載**してください。
-   - 同様に、**商品Bのセクション冒頭で1回だけ【楽天市場での正式商品名】『${fullNameB}』を記載**してください。
-   - **【商品名の呼び方に関する厳重注意】**:
-     - 本文や見出しで呼ぶ略称は、『国産 牛肉』『やわらか 赤身』のような**中身がわからない一般名詞・形容詞だけで呼ぶのは絶対に禁止！**
-     - 必ず銘柄・産地・特徴が伝わる自然な商品名（例: 『熊本県産あか牛ローストビーフ』『豊味館の原木1kg』『海男の牡蠣オイル漬け』など）を文章中で使って語ってください。
+2. **SEO＆アメブロ公式ジャンル対策（「家飲み」「晩酌」の自然な織り込み）**:
+   - アメブロ「家飲み」ジャンルでの露出を高めるため、記事全体（タイトル、冒頭、ペアリング検討、結び）を通じて、**「家飲み」「晩酌」という単語を不自然にならない頻度（記事全体でそれぞれ2〜4回程度）で自然に織り込んでください**。過度な連発（スパム的詰め込み）は禁止ですが、一人で部屋で楽しむ「家飲み」の空気感を言葉に宿らせてください。
 
-3. **メタ用語の完全禁止**:
-   - 「さっきの導入で〜」「導入で書いたように〜」「プロフィールの通り〜」などの**メタ発言・ブログ用語は絶対に使わないこと**。
+3. **楽天検索用の正式商品名と自然な略称のルール（最重要）**:
+   - 後からリンクを差し替えやすくするため、**各お菓子・おつまみ（候補1〜3）とお酒のセクション冒頭で、それぞれ1回だけ【楽天市場での正式商品名】を正確に記載**してください。
+   - 本文や見出しでは、『国産 牛肉』『やわらか 赤身』のような**中身がわからない一般名詞・形容詞だけで呼ぶのは禁止**！必ず特徴やブランドが伝わる自然な商品名（例: 『${snacks[0].cleanName}』など）で呼んでください。
 
-4. **自分の普段の好み（書き手の立ち位置）を明記**:
-   - 「普段はスッキリ辛口派」「甘いお酒よりキレ重視」「夜はウイスキーをちびちび飲むのが好き」「甘いものより塩気のあるおつまみ派」など、判断基準を自然に盛り込む。
+4. **お菓子・おつまみ3候補の徹底的な吟味と葛藤**:
+   - なぜこの3つで迷っているのか？（甘み・塩気・カカオの深み・バター感・食感、一人での家飲み用としてのサイズ感など）それぞれの魅力と違いを、お酒好きならではの目線で細かく語る。
 
-5. **テーマの一発提示**:
-   - **「え、これどっち買えばいいんだ…？」** と一人で画面の前で本気で悩んでいる様子を伝える。
+5. **相棒のお酒とのペアリング妄想**:
+   - 「このお菓子・おつまみに合わせるなら、どんなお酒がいいか？」を真剣に考える。
+   - 「重口の赤ワインか？それともスモーキーなウイスキーか？」「キレのある麦焼酎か、甘露な古酒か？」「ハイボールでスッキリ合わせるか、ロックで濃厚に寄り添わせるか？」といった葛藤を挟みつつ、今回ピックアップした『${alcohol.cleanName}』との相性を語る。
 
-6. **内容量や仕様への自然な言及**:
-   - 正式商品名やスペックに記載されている内容量やタイプ（例：「Aは〇〇g、Bは〇〇g」「Aは四合瓶720ml、Bも720ml」など）に軽く触れてください。
-   - **【厳重注意】「6,9,12個から選べる！」などのバリエーション選択肢としての言及は絶対にしないでください！**
+6. **正直、今夜の自分の本音（どれに傾いているか）**:
+   - 「今のところ一番惹かれているのは候補〇〇だけど、今夜の家飲みの気分を考えると候補〇〇も捨てがたい…」というリアルな揺らぎ。
 
-7. **価格・スペック比較セクションの完全オリジナル化**:
-   - 定型見出しは使わず、今回の2つの特徴に合わせたオリジナル見出しを立て、具体的な味・香り・ボリュームの対比を語ってください。
-
-8. **相性やシーン・ペアリングでの比較軸**:
-   - 一人飲みの簡単な手料理やスーパー・コンビニのアテとの相性、夜の静かな晩酌シーンにフォーカスして比較する。
-
-9. **「正直、どっちに惹かれてる？」という見出しと本音**:
-   - 「今のところ自分なら7:3で${nameA}寄りだけど…」といった、リアルな本音の傾きを入れる。
-
-10. **まとめと自然な締めくくり**:
-    - 「〜部でした！」などの明るい締めは禁止。静かに自問自答しながら、読者に「もし飲んだことある人がいたら、こっそり教えてほしいです」と小さく語りかけて終わること。
+7. **静かな締めくくり**:
+   - 「部屋には相変わらず時計の秒針の音しか聞こえませんが、今夜はこのペアリング妄想を肴にもう一杯だけ飲んで寝ようと思います。皆さんはこの組み合わせなら、どの家飲みスイーツが気になりますか？」と、読者に小さく語りかけて終わる。
 
 --------------------------------------------------
 【絶対に排除・修正すべき禁止事項】
 
 - ❌ **元気な部活ノリ・ポジティブすぎるテンション（「おうち晩酌部です！」「〜部」等）の完全禁止**。
-- ❌ **未購入なのに実際に飲んだ/食べたように書く表現の禁止**。
+- ❌ **未購入なのに実際に食べた/飲んだように書く表現の禁止**。
 - ❌ **「導入で〜」などのメタ用語の完全禁止**。
 - ❌ **「〜ですよね」「悩ましい」「マリアージュ…！」「ヨダレが出てきます」などのAI常套句の連発禁止**。
-- ❌ **「6,9,12個から選べる」などのバリエーション言及の完全禁止**。
-- ❌ **「価格差は約0円」の完全禁止**。
 - ❌ **卓上家電の用語（プレート、焼き上がり、煙、お手入れ等）は一切使わないこと！**
 
 --------------------------------------------------
 【Markdown見出し構成ルール】
-- 記事タイトルは魅力的でブログらしいものにすること（例: 『${nameA}』と『${nameB}』、一人飲みの夜に迎えるならどっち？ / 【本気で迷い中】『${nameA}』VS『${nameB}』... 等）
+- 記事タイトルは魅力的でブログらしいものにすること（例: 仕事終わりの静かな家飲みに。『${snacks[0].cleanName}』と合わせる相棒の一杯を迷う夜 / 【至福の家飲みペアリング】こだわりのお菓子3選と、今夜合わせたいお酒... 等）
+- 記事タイトルにも可能なら「家飲み」または「晩酌」を自然に1回含めるとベター。
 - h1（#）は本文中で使用禁止。h2（##）およびh3（###）を使用すること。
 - 句点「。」や独白の区切りごとに空行を1行挟んで、スマホで読みやすい適度な改行を入れること。
 - 心の声などは **太文字** を適度に使用すること。
 - 構成案（各セクションの間は \`---\` で区切る）：
-  - 冒頭（一人きりの夜の食卓・静かな情景・欲が出た経緯・なぜこの2つなのか・普段の好み）
+  - 冒頭（仕事終わりの静かな部屋・一人家飲みの時間・お菓子とお酒のペアリング探訪）
   - \`---\`
-  - \`## 『${nameA}』が気になっている理由\`（※冒頭で1回だけ正式商品名『${fullNameA}』と価格${priceA}円を明記し、特徴を語る）
+  - \`## 今夜迷っている極上のお菓子・おつまみ3選\`
+    - \`### 1. 『${snacks[0].cleanName}』\`（※冒頭に【楽天市場での正式商品名】『${snacks[0].itemName}』と価格を明記）
+    - \`### 2. 『${snacks[1].cleanName}』\`（※冒頭に【楽天市場での正式商品名】『${snacks[1].itemName}』と価格を明記）
+    - \`### 3. 『${snacks[2] ? snacks[2].cleanName : 'もう一つの候補'}』\`（※冒頭に正式商品名と価格を明記）
   - \`---\`
-  - \`## もう一つの候補『${nameB}』の魅力\`（※冒頭で1回だけ正式商品名『${fullNameB}』と価格${priceB}円を明記し、特徴を語る）
+  - \`## これらに合わせるならどんなお酒がいいか？（相棒の一杯を考える）\`
+    - （「ワインかウイスキーか焼酎か…」というお酒選びの思考過程）
+    - \`### 相棒の候補：『${alcohol.cleanName}』\`（※冒頭に【楽天市場での正式商品名】『${alcohol.itemName}』と価格を明記）
   - \`---\`
-  - \`## （価格やスペック、決定的な違いを比較するオリジナルなh2見出し）\`
+  - \`## 正直、今夜の自分の本音は…\`
+    - （どれをポチるか迷うリアルな心理）
   - \`---\`
-  - \`## 合わせたい料理やお酒、晩酌シーンで比べてみる\`
-  - \`---\`
-  - \`## 正直、どっちに惹かれてる？\`
-    - \`### ${nameA}に惹かれる理由\`
-    - \`### ${nameB}に惹かれる理由\`
-    - （「今のところ7:3で〇〇寄りだけど…」という本音）
-  - \`---\`
-  - \`## （記事の文脈に合わせたオリジナルな締めくくりh2見出し）\`
-    - （静かな迷い＋読者への小さな問いかけ）
+  - \`## 静かな部屋で、もう一杯だけ\`
+    - （読者への静かな問いかけで終了）
 
 --------------------------------------------------
 出力は必ず以下の有効なJSON形式のみとしてください：
 {
   "title": "記事タイトル文字列",
   "contentHtml": "（Markdown形式の本文文字列）",
-  "tags": ["${defaultTag}", "晩酌", "一人飲み", "家飲み", "本音比較"]
+  "tags": ["家飲み", "晩酌", "おつまみ", "一人飲み", "ふるさと納税"]
 }
 `;
 
@@ -718,8 +596,8 @@ ${randomSituation}
         const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
         const article = JSON.parse(cleanedJson);
         article.contentHtml = convertToCleanHtml(article.contentHtml);
-        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : [defaultTag, '晩酌', '家飲み', '本音比較'];
-        console.log(`[AI生成] Gemini (${modelName}) で比較記事の生成に成功！`);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : ['おつまみ', '晩酌', '一人飲み', '家飲み', 'ふるさと納税'];
+        console.log(`[AI生成] Gemini (${modelName}) で記事の生成に成功！`);
         return article;
       } catch (err) {
         console.log(`[Gemini API (${modelName}) エラー]: ${err.message}`);
@@ -741,7 +619,7 @@ ${randomSituation}
         console.log(`[Groq API] モデル ${m.name} を試行中...`);
         const chatCompletion = await groq.chat.completions.create({
           messages: [
-            { role: 'system', content: 'あなたはAmebaブログで人気の晩酌・お酒好きブロガーです。要求されたJSON形式のみで回答してください。' },
+            { role: 'system', content: 'あなたはAmebaブログで人気の晩酌ブロガーです。要求されたJSON形式のみで回答してください。' },
             { role: 'user', content: prompt }
           ],
           model: m.id,
@@ -750,8 +628,8 @@ ${randomSituation}
         const text = chatCompletion.choices[0]?.message?.content || '';
         const article = JSON.parse(text);
         article.contentHtml = convertToCleanHtml(article.contentHtml);
-        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : [defaultTag, '晩酌', '家飲み', '本音比較'];
-        console.log(`[AI生成] Groq (${m.name}) で比較記事の生成に成功！`);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : ['おつまみ', '晩酌', '一人飲み', '家飲み', 'ふるさと納税'];
+        console.log(`[AI生成] Groq (${m.name}) で記事の生成に成功！`);
         return article;
       } catch (err) {
         console.log(`[Groq API (${m.name}) エラー]: ${err.message}`);
@@ -760,67 +638,62 @@ ${randomSituation}
   }
 
   // --- C. フォールバック記事生成 ---
-  console.log('AI API不可のため、比較フォールバック記事を生成します。');
-  const title = `『${nameA}』と『${nameB}』、次の晩酌で選ぶならどっち？`;
+  console.log('AI API不可のため、フォールバック記事を生成します。');
+  const title = `仕事終わりの部屋で。『${snacks[0].cleanName}』と相棒のお酒を迷う夜`;
 
   const rawFallback = `
-今夜はちょっと贅沢なおつまみを準備していて、それに合わせる最高の相棒を探してたんですよね。
+仕事の後に美味しいものと美味しいお酒の組み合わせは格別ですよね。
+最近は一人きりの部屋で晩酌しながら、ネットで美味しそうなおつまみとお酒を探すことにハマっています。
 
-でも魅力的な候補が2つ見つかってしまって、どれから試すべきか本当に迷う……。
-
-**「え、これどっち買えばいいんだ？」**って本気で悩んでます。
-
----
-
-## 『${nameA}』が気になっている理由
-
-まず見つけたのが、**『${fullNameA}』**（約${priceA}円）。
-
-レビューを見ていると評判が良くて、内容量のボリューム感や味わいも今夜の気分にピッタリなんですよね。
+今夜は無性に**「${theme.themeName}」**が欲しくなって、画面の前で頭を抱えています。
 
 ---
 
-## もう一つの候補『${nameB}』の魅力
+## 今夜迷っている極上のおつまみ候補
 
-そしてもう一つ気になっているのが、**『${fullNameB}』**（約${priceB}円）。
+### 1. 『${snacks[0].cleanName}』
+【楽天市場での正式商品名】『${snacks[0].itemName}』（${snacks[0].price.toLocaleString()}円）
 
-こっちはこっちで特徴が際立っていて、週末にじっくり楽しむのにも最高そう。
+素材の旨味が凝縮されていて、一人でちびちびやるには最高のボリューム感。
 
----
+### 2. 『${snacks[1].cleanName}』
+【楽天市場での正式商品名】『${snacks[1].itemName}』（${snacks[1].price.toLocaleString()}円）
 
-${isSamePrice ? `## どちらも同じ${priceA}円。値段が全く同じだからこそ内容量やこだわりで迷う
+こっちはこっちでまた違ったアプローチで攻めてきていて、甲乙つけがたい…。
 
-どちらも**同じ${priceA}円**。
+${snacks[2] ? `### 3. 『${snacks[2].cleanName}』
+【楽天市場での正式商品名】『${snacks[2].itemName}』（${snacks[2].price.toLocaleString()}円）
 
-値段が全く一緒だからこそ、損得ではなく純粋に「内容量やタイプ」や「合わせたいお料理」で選ぶことになります。` : `## 差額はわずか約${priceDiff}円。この2つの決定的な違いを考える
-
-2つの価格差は**約${priceDiff}円**。
-
-ほぼ同価格帯だからこそ、値段の損得ではなく純粋に「味の好み」や「内容量」で選ぶことになります。`}
-
----
-
-## 正直、どっちに惹かれてる？
-
-今のところ、自分の中では**7:3で『${nameA}』寄り**。
-
-でも週末になったら『${nameB}』をポチっている気もして、まだ決めきれません。
+贅沢感という点ではこれが一番かもしれません。` : ''}
 
 ---
 
-## 結論：今夜の自分の本音は…
+## これらに合わせるならどんなお酒がいいか？
 
-どっちも魅力的だから、今夜のメニューと相談しながらもう少し考えてみます！
+おつまみを見ながら、「合わせるお酒はどうしようか」と考える時間が一番楽しいんですよね。
 
-一応、今回悩んでた商品リンクを貼っておきますね。
+赤ワインよりもウイスキーか？ それともキレのある麦焼酎か…？
 
-皆ならどっちを選びますか？ ぜひ教えてください！
+### 相棒の候補：『${alcohol.cleanName}』
+【楽天市場での正式商品名】『${alcohol.itemName}』（${alcohol.price.toLocaleString()}円）
+
+この一杯があれば、今夜のアテのポテンシャルを120%引き出してくれる気がしています。
+
+---
+
+## 正直、今夜の自分の本音は…
+
+どれを選んでも間違いないのは分かっているんですが、一人で画面を見つめていると迷いは尽きません。
+
+今夜はこの妄想を肴に、手元の薄いハイボールを飲み干して寝ることにします。
+
+それでは、おやすみなさい。
 `;
 
   return {
     title: title,
     contentHtml: convertToCleanHtml(rawFallback),
-    tags: [defaultTag, '晩酌', '家飲み', '本音比較']
+    tags: ['おつまみ', '晩酌', '一人飲み', '家飲み', 'ふるさと納税']
   };
 }
 
@@ -890,7 +763,7 @@ async function injectEditorContent(page, fullHtml) {
 }
 
 // 3. PlaywrightによるAmeba自動投稿処理（下書き保存）
-async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
+async function postToAmeba(title, rawContentHtml, tags = [], itemGroup) {
   const amebaId = process.env.AMEBA_ID;
   const amebaPassword = process.env.AMEBA_PASSWORD;
   const amebaCookieJson = process.env.AMEBA_COOKIES;
@@ -963,7 +836,9 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
     const safeTags = Array.isArray(tags) ? tags : [];
     const formattedTags = safeTags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
     
-    // ハッシュタグ設定 ＆ カバー画像URL（image_url）に商品Aの画像URLを設定してモーダルをスキップさせる
+    // カバー画像にはおつまみ1つ目の画像を使用
+    const coverUrl = itemGroup.snacks[0]?.imageUrl || itemGroup.alcohol?.imageUrl || '';
+
     await page.evaluate(({ tagStr, coverUrl }) => {
       const tagInput = document.querySelector('input[name="hashtag"], #js-hashtag-input');
       if (tagInput) {
@@ -979,7 +854,7 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
         document.forms[0]?.appendChild(imgInput);
       }
       imgInput.value = coverUrl;
-    }, { tagStr: formattedTags, coverUrl: itemPair.itemA.imageUrl }).catch(() => {});
+    }, { tagStr: formattedTags, coverUrl }).catch(() => {});
 
     await page.keyboard.press('Escape').catch(() => {});
     await page.waitForTimeout(500);
@@ -1045,7 +920,7 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
     console.log('保存完了後のURL:', finalUrl);
 
     console.log('--------------------------------------------------');
-    console.log('【安全運用成功】生成した比較記事を Ameba の「下書き」として正常保存しました！');
+    console.log('【安全運用成功】生成したおつまみ×お酒記事を Ameba の「下書き」として正常保存しました！');
     console.log('--------------------------------------------------');
 
   } catch (error) {
@@ -1058,25 +933,19 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemPair) {
 
 // メイン処理
 async function main() {
-  const randomObj = selectRandomKeyword();
-  const randomKeyword = typeof randomObj === 'object' ? randomObj.keyword : randomObj;
+  console.log('=== おつまみ×お酒ペアリング探訪モード開始 ===');
+  const itemGroup = await fetchSnackAndAlcoholGroup();
 
-  console.log(`検索キーワード: 「${randomKeyword}」 (ジャンル: ${randomObj.subCategory || randomObj.category})`);
-  const itemPair = await fetchRakutenItemPair(randomObj);
-
-  if (!itemPair) {
-    console.log('対象商品が見つかりませんでした。スキップします。');
+  if (!itemGroup) {
+    console.log('対象商品グループが見つかりませんでした。スキップします。');
     return;
   }
 
-  console.log(`比較商品A:「${itemPair.itemA.itemName.slice(0, 20)}...」 (${itemPair.itemA.price}円)`);
-  console.log(`比較商品B:「${itemPair.itemB.itemName.slice(0, 20)}...」 (${itemPair.itemB.price}円)`);
-  console.log('2商品比較記事を生成します...');
-
-  const article = await generateArticlePair(itemPair);
+  console.log('おつまみ3品＋お酒1品の探訪・比較記事をAI生成します...');
+  const article = await generateArticleGroup(itemGroup);
 
   console.log('Amebaへの自動投稿処理を開始します...');
-  await postToAmeba(article.title, article.contentHtml, article.tags, itemPair);
+  await postToAmeba(article.title, article.contentHtml, article.tags, itemGroup);
 }
 
 main();
