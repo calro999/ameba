@@ -85,30 +85,52 @@ function getProfileData() {
   return '';
 }
 
-// 単品商品のみを厳選し、セット・飲み比べ・食べ比べ・定期便・バリエーション選択（6,9,12個から選べる等）・付属品・業務用を徹底排除する判定関数
-function isMainProduct(item) {
+// お菓子・スイーツ用フィルター判定（個包装や数袋入りは許容し、定期便や選べるバリエーションのみ排除）
+function isMainProductFood(item) {
   const name = item.itemName;
   const price = item.itemPrice;
 
-  // 1. バリエーション選択式（「選べる」「〇個から選べる」等）の正規表現チェック
+  if (price < 1500) return false;
+
+  // 定期便・業務用・付属品等の排除
+  const ngKeywords = [
+    '定期便', '定期購入', '定期コース', '選べる定期便',
+    '業務用', '店舗用', '施設用', '大容量業務用',
+    '空ボトル', '空瓶', 'グラスのみ', 'タンブラーのみ',
+    '【パーツ】', '【部品】', '交換用'
+  ];
+
+  for (const kw of ngKeywords) {
+    if (name.includes(kw)) return false;
+  }
+
+  // 選択式バリエーション（選べる味や選べる容量）は除外
+  if (/(選べる|えらべる|選択可能|選択可|お選び|から選|より選)/i.test(name)) return false;
+
+  return true;
+}
+
+// お酒用フィルター判定（複数本セット、ケース買い、定期便、付属品等を排除）
+function isMainProductAlcohol(item) {
+  const name = item.itemName;
+  const price = item.itemPrice;
+
+  // 2. バリエーション選択式
   const selectRegexPatterns = [
     /(選べる|えらべる|選択可能|選択可|お選び|から選|より選|お好みで)/i,
-    /\d+[\s,、・~/〜\-]*(?:個|本|種|缶|箱|袋|kg|g|サイズ|味|セット)[\s,、・~/〜\-]*\d+/i,
-    /\d+(?:,\s*\d+)+(?:個|本|種|袋|缶|サイズ)/i,
-    /(?:小分け|大容量|アソート|バラエティ)/i
+    /\d+[\s,、・~/〜\-]*(?:本|缶|箱|サイズ|味|セット)[\s,、・~/〜\-]*\d+/i,
+    /(?:小分け|大容量|バラエティ)/i
   ];
 
   for (const regex of selectRegexPatterns) {
     if (regex.test(name)) return false;
   }
 
-  // 2. NGキーワード（セット商品・定期便・複数本・ケース買い・付属品等の徹底排除）
+  // NGキーワード
   const ngKeywords = [
-    'セット', 'まとめ買い', '飲み比べ', '食べ比べ', '詰め合わせ', 'アソート',
     '定期便', '定期購入', '定期コース', '選べる定期便',
     '2本', '3本', '4本', '5本', '6本', '12本', '24本', '本組', '本入', '缶入',
-    '2個', '3個', '4個', '5個', '6個', '個入', '箱入', '2箱', '3箱',
-    'バラエティ', 'セレクト', 'ギフトセット', 'パック', '箱買い', 'ケース販売', 'ケース買い', '1ケース', '2ケース',
+    '2箱', '3箱', '箱買い', 'ケース販売', 'ケース買い', '1ケース', '2ケース',
     '化粧箱のみ', 'ギフト箱のみ', '専用箱のみ', '包装紙のみ', 'のしのみ',
     '【パーツ】', '【部品】', '交換用', 'ミニボトル', 'お試しミニ', 'ミニチュア',
     '業務用', '店舗用', '施設用', '大容量業務用',
@@ -119,10 +141,13 @@ function isMainProduct(item) {
     if (name.includes(kw)) return false;
   }
 
-  // 価格が安すぎる商品（送料別小袋や付属品の可能性）を排除（2,000円未満を除外）
-  if (price < 2000) return false;
+  if (price < 1500) return false;
 
   return true;
+}
+
+function isMainProduct(item, type = 'alcohol') {
+  return type === 'food' ? isMainProductFood(item) : isMainProductAlcohol(item);
 }
 
 // 長すぎる型番やSEOキーワード・重複単語を除去し、綺麗な「ブランド/銘柄名＋商品名」を抽出する関数
@@ -210,10 +235,10 @@ const SNACK_THEMES = [
     alcoholCategory: 'shochu_beer',
     alcoholName: 'キレのある麦焼酎ロックや炭酸割り、辛口ハイボール',
     snackKeywords: [
-      'ふるさと納税 お煎餅 職人 手焼き', 'ふるさと納税 柿の種 高級 専門店', 'ふるさと納税 あられ おかき 詰め合わせなし',
-      'ふるさと納税 ポテトチップス クラフト', 'ふるさと納税 揚げせんべい 無添加', 'ふるさと納税 枝豆 スナック フリーズドライ',
-      'ふるさと納税 そら豆 揚げ 菓子 塩', 'ふるさと納税 ごぼうチップス 国産', 'ふるさと納税 イカ天 瀬戸内レモン',
-      'ふるさと納税 カレー せんべい 濃厚', 'ふるさと納税 エビせんべい 海老 濃厚', 'ふるさと納税 パスタスナック 揚げパスタ'
+      'ふるさと納税 せんべい', 'ふるさと納税 柿の種', 'ふるさと納税 あられ', 'ふるさと納税 おかき',
+      'ふるさと納税 ポテトチップス', 'ふるさと納税 揚げせんべい', 'ふるさと納税 枝豆 スナック',
+      'ふるさと納税 そら豆 菓子', 'ふるさと納税 ごぼうチップス', 'ふるさと納税 イカ天 レモン',
+      'ふるさと納税 カレーせんべい', 'ふるさと納税 えびせんべい'
     ],
     alcoholKeywords: [
       '本格焼酎 麦焼酎 720ml', '壱岐 麦焼酎 720ml', '大分 麦焼酎 720ml', 'ウイスキー ハイボール 700ml',
@@ -226,9 +251,9 @@ const SNACK_THEMES = [
     alcoholCategory: 'whisky_brandy',
     alcoholName: 'スモーキーなアイラウイスキーや重厚なシェリー樽モルト',
     snackKeywords: [
-      'ふるさと納税 ガトーショコラ 濃厚', 'ふるさと納税 チョコレート ビター 単品', 'ふるさと納税 生チョコレート カカオ',
-      'ふるさと納税 テリーヌショコラ 濃厚', 'ふるさと納税 オランジェット オレンジピール チョコ', 'ふるさと納税 チョコブラウニー 濃厚',
-      'ふるさと納税 割れチョコ ハイカカオ', 'ふるさと納税 ボンボンショコラ 高級', 'ふるさと納税 フォンダンショコラ'
+      'ふるさと納税 ガトーショコラ', 'ふるさと納税 チョコレート ビター', 'ふるさと納税 生チョコレート',
+      'ふるさと納税 テリーヌショコラ', 'ふるさと納税 オランジェット', 'ふるさと納税 チョコブラウニー',
+      'ふるさと納税 割れチョコ カカオ', 'ふるさと納税 ボンボンショコラ', 'ふるさと納税 フォンダンショコラ'
     ],
     alcoholKeywords: [
       'ウイスキー シングルモルト 700ml', 'アイラ ウイスキー 700ml', 'シェリーカスク ウイスキー 700ml',
@@ -241,9 +266,9 @@ const SNACK_THEMES = [
     alcoholCategory: 'wine_whisky',
     alcoholName: '樽香の効いた白ワイン（シャルドネ）や重口赤ワイン',
     snackKeywords: [
-      'ふるさと納税 バスクチーズケーキ 濃厚', 'ふるさと納税 チーズテリーヌ', 'ふるさと納税 ベイクドチーズケーキ 熟成',
-      'ふるさと納税 チーズ クッキー 塩気', 'ふるさと納税 チーズ サブレ 濃厚', 'ふるさと納税 ゴルゴンゾーラ チーズケーキ',
-      'ふるさと納税 チーズタルト 濃厚', 'ふるさと納税 カマンベール チーズケーキ', 'ふるさと納税 パルミジャーノ 焼き菓子'
+      'ふるさと納税 バスクチーズケーキ', 'ふるさと納税 チーズテリーヌ', 'ふるさと納税 ベイクドチーズケーキ',
+      'ふるさと納税 チーズ クッキー', 'ふるさと納税 チーズ サブレ', 'ふるさと納税 ゴルゴンゾーラ チーズケーキ',
+      'ふるさと納税 チーズタルト', 'ふるさと納税 カマンベール チーズケーキ'
     ],
     alcoholKeywords: [
       '白ワイン シャルドネ 750ml', '赤ワイン フルボディ 750ml', '赤ワイン ピノノワール 750ml',
@@ -256,9 +281,9 @@ const SNACK_THEMES = [
     alcoholCategory: 'bourbon_brandy',
     alcoholName: 'バニラ香あふれるバーボンやフルーティーなスペイサイドモルト',
     snackKeywords: [
-      'ふるさと納税 フィナンシェ 発酵バター', 'ふるさと納税 カヌレ フランス 焼き菓子', 'ふるさと納税 マドレーヌ 濃厚 バター',
-      'ふるさと納税 ガレットブルトンヌ バター', 'ふるさと納税 パウンドケーキ フルーツ', 'ふるさと納税 フロランタン アーモンド',
-      'ふるさと納税 クッキー缶 職人 バター', 'ふるさと納税 アップルパイ シナモン', 'ふるさと納税 レモンケーキ ピール'
+      'ふるさと納税 フィナンシェ', 'ふるさと納税 カヌレ', 'ふるさと納税 マドレーヌ',
+      'ふるさと納税 ガレットブルトンヌ', 'ふるさと納税 パウンドケーキ フルーツ', 'ふるさと納税 フロランタン',
+      'ふるさと納税 クッキー缶 バター', 'ふるさと納税 アップルパイ', 'ふるさと納税 レモンケーキ'
     ],
     alcoholKeywords: [
       'バーボンウイスキー 700ml', 'スペイサイド ウイスキー 700ml', 'ハイランド ウイスキー 700ml',
@@ -271,9 +296,9 @@ const SNACK_THEMES = [
     alcoholCategory: 'sake_shochu',
     alcoholName: '熟成古酒泡盛、旨味の強い山廃純米酒、濃厚な芋焼酎',
     snackKeywords: [
-      'ふるさと納税 干し柿 あんぽ柿', 'ふるさと納税 羊羹 栗 濃厚', 'ふるさと納税 どら焼き 粒あん',
-      'ふるさと納税 かりんとう 黒糖 高級', 'ふるさと納税 芋けんぴ 塩', 'ふるさと納税 栗きんとん 国産栗',
-      'ふるさと納税 最中 粒あん 職人', 'ふるさと納税 大福 塩大福 豆大福', 'ふるさと納税 カステラ 熟成'
+      'ふるさと納税 干し柿', 'ふるさと納税 羊羹 栗', 'ふるさと納税 どら焼き',
+      'ふるさと納税 かりんとう 黒糖', 'ふるさと納税 芋けんぴ 塩', 'ふるさと納税 栗きんとん',
+      'ふるさと納税 最中 あんこ', 'ふるさと納税 塩大福 豆大福', 'ふるさと納税 カステラ'
     ],
     alcoholKeywords: [
       '日本酒 山廃 720ml', '日本酒 生酛 720ml', '沖縄 泡盛 古酒 720ml',
@@ -286,9 +311,9 @@ const SNACK_THEMES = [
     alcoholCategory: 'whisky_gin',
     alcoholName: 'ロックで愉しむスコッチウイスキーや香り高いクラフトジン',
     snackKeywords: [
-      'ふるさと納税 ミックスナッツ 無塩 素焼き', 'ふるさと納税 燻製 ナッツ ピート', 'ふるさと納税 マカダミアナッツ 殻付き',
-      'ふるさと納税 ピスタチオ ロースト 塩', 'ふるさと納税 ドライフルーツ 砂糖不使用', 'ふるさと納税 無花果 イチジク ドライフルーツ',
-      'ふるさと納税 カシューナッツ ロースト', 'ふるさと納税 燻製 ピスタチオ', 'ふるさと納税 デーツ ドライフルーツ'
+      'ふるさと納税 ミックスナッツ 素焼き', 'ふるさと納税 燻製 ナッツ', 'ふるさと納税 マカダミアナッツ',
+      'ふるさと納税 ピスタチオ 塩', 'ふるさと納税 ドライフルーツ', 'ふるさと納税 イチジク ドライフルーツ',
+      'ふるさと納税 カシューナッツ', 'ふるさと納税 デーツ ドライフルーツ'
     ],
     alcoholKeywords: [
       'ウイスキー シングルモルト 700ml', 'ジャパニーズ クラフトジン 700ml', 'スコッチウイスキー 700ml',
@@ -297,8 +322,8 @@ const SNACK_THEMES = [
   }
 ];
 
-// 楽天API呼び出しヘルパー（単体キーワード）
-async function searchRakutenItems(kw, count = 15) {
+// 楽天API呼び出しヘルパー（レートリミット対策・リトライ付き）
+async function searchRakutenItems(kw, count = 15, itemType = 'alcohol') {
   const appId = process.env.RAKUTEN_APPLICATION_ID;
   const affId = process.env.RAKUTEN_AFFILIATE_ID;
   const accessKey = process.env.RAKUTEN_ACCESS_KEY;
@@ -310,14 +335,22 @@ async function searchRakutenItems(kw, count = 15) {
   let url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401?format=json&keyword=${encodeURIComponent(kw)}&hits=${count}&page=1&applicationId=${appId}&accessKey=${accessKey}`;
   if (affId) url += `&affiliateId=${affId}`;
 
-  try {
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json && json.Items && json.Items.length > 0) {
-      return json.Items.map(i => i.Item).filter(i => isMainProduct(i));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json && json.Items && json.Items.length > 0) {
+        return json.Items.map(i => i.Item).filter(i => isMainProduct(i, itemType));
+      }
+      if (json && (json.error === 'too_many_requests' || json.message?.includes('Rate limit'))) {
+        console.log(`[Rakuten API] レートリミット検知、待機して再試行 (${attempt + 1}/3)...`);
+        await sleep(1500);
+        continue;
+      }
+    } catch (e) {
+      console.log(`[Rakuten API エラー (${kw})]:`, e.message);
     }
-  } catch (e) {
-    console.log(`[Rakuten API エラー (${kw})]:`, e.message);
+    await sleep(500);
   }
   return [];
 }
@@ -347,7 +380,7 @@ async function fetchSnackAndAlcoholGroup() {
   const usedKeywords = getUsedKeywords();
   const postedList = getPostedItems();
 
-  // 1. テーマをランダム選定（直近で使われていないテーマを優先）
+  // 1. テーマをランダム選定
   const theme = SNACK_THEMES[Math.floor(Math.random() * SNACK_THEMES.length)];
   console.log(`[選定テーマ]: ${theme.themeName} (想定酒: ${theme.alcoholName})`);
 
@@ -357,7 +390,7 @@ async function fetchSnackAndAlcoholGroup() {
 
   for (const kw of shuffledSnackKws) {
     if (selectedSnacks.length >= 3) break;
-    const items = await searchRakutenItems(kw, 15);
+    const items = await searchRakutenItems(kw, 15, 'food');
     for (const raw of items) {
       raw.cleanName = cleanProductName(raw.itemName);
       if (!isItemAlreadyPosted(raw, postedList) && !selectedSnacks.some(s => areItemsTooSimilar(s, raw))) {
@@ -375,7 +408,7 @@ async function fetchSnackAndAlcoholGroup() {
     const allSnackKws = SNACK_THEMES.flatMap(t => t.snackKeywords).sort(() => 0.5 - Math.random());
     for (const kw of allSnackKws) {
       if (selectedSnacks.length >= 3) break;
-      const items = await searchRakutenItems(kw, 10);
+      const items = await searchRakutenItems(kw, 10, 'food');
       for (const raw of items) {
         raw.cleanName = cleanProductName(raw.itemName);
         if (!isItemAlreadyPosted(raw, postedList) && !selectedSnacks.some(s => areItemsTooSimilar(s, raw))) {
@@ -387,12 +420,29 @@ async function fetchSnackAndAlcoholGroup() {
     }
   }
 
+  // それでも2つ未満なら、一般人気スイーツキーワードから最終救済
+  if (selectedSnacks.length < 2) {
+    console.log('[最終救済] 一般人気お菓子から候補を補充...');
+    const fallbackKws = ['ふるさと納税 せんべい', 'ふるさと納税 チョコレート', 'ふるさと納税 チーズケーキ', 'ふるさと納税 ナッツ'];
+    for (const kw of fallbackKws) {
+      if (selectedSnacks.length >= 3) break;
+      const items = await searchRakutenItems(kw, 10, 'food');
+      for (const raw of items) {
+        raw.cleanName = cleanProductName(raw.itemName);
+        if (!selectedSnacks.some(s => areItemsTooSimilar(s, raw))) {
+          selectedSnacks.push(raw);
+          break;
+        }
+      }
+    }
+  }
+
   // 3. このおつまみ達に合わせる「お酒」を1本取得
   const shuffledAlcKws = [...theme.alcoholKeywords].sort(() => 0.5 - Math.random());
   let selectedAlcohol = null;
 
   for (const kw of shuffledAlcKws) {
-    const alcItems = await searchRakutenItems(kw, 15);
+    const alcItems = await searchRakutenItems(kw, 15, 'alcohol');
     for (const raw of alcItems) {
       raw.cleanName = cleanProductName(raw.itemName);
       if (!isItemAlreadyPosted(raw, postedList)) {
@@ -407,7 +457,7 @@ async function fetchSnackAndAlcoholGroup() {
 
   // お酒が見つからない場合のフォールバック
   if (!selectedAlcohol) {
-    const fbItems = await searchRakutenItems('ウイスキー シングルモルト 700ml', 10);
+    const fbItems = await searchRakutenItems('ウイスキー シングルモルト 700ml', 10, 'alcohol');
     if (fbItems.length > 0) {
       selectedAlcohol = fbItems[0];
       selectedAlcohol.cleanName = cleanProductName(selectedAlcohol.itemName);
@@ -578,11 +628,10 @@ ${alcoholText}
   // --- A. Gemini API 試行（最新モデルローテーション） ---
   if (geminiApiKey) {
     const models = [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
       'gemini-3.5-flash',
       'gemini-3.5-flash-lite',
-      'gemini-2.0-flash',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
       'gemini-3.1-flash-lite'
     ];
     const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -836,8 +885,8 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemGroup) {
     const safeTags = Array.isArray(tags) ? tags : [];
     const formattedTags = safeTags.map(t => t.startsWith('#') ? t : `#${t}`).join(' ');
     
-    // カバー画像にはおつまみ1つ目の画像を使用
-    const coverUrl = itemGroup.snacks[0]?.imageUrl || itemGroup.alcohol?.imageUrl || '';
+    // カバー画像には1品目の画像を使用
+    const coverUrl = itemGroup.snacks?.[0]?.imageUrl || itemGroup.items?.[0]?.imageUrl || itemGroup.alcohol?.imageUrl || '';
 
     await page.evaluate(({ tagStr, coverUrl }) => {
       const tagInput = document.querySelector('input[name="hashtag"], #js-hashtag-input');
@@ -931,8 +980,316 @@ async function postToAmeba(title, rawContentHtml, tags = [], itemGroup) {
   }
 }
 
-// メイン処理
+// === 6回に1回の「お酒10選特集記事」設定とジャンル定義（均等ローテーション） ===
+const LIQUOR_GENRES = [
+  {
+    id: 'whisky',
+    name: 'ウイスキー',
+    searchKeyword: 'ウイスキー 700ml',
+    fallbackKeywords: ['スコッチウイスキー 700ml', 'シングルモルト ウイスキー', 'バーボンウイスキー 700ml'],
+    articleTheme: '秋の夜長に一人静かにグラスを傾けたい、極上のウイスキー10選',
+    subHeading: '琥珀色の時間を愉しむ、個性が際立つ名作ウイスキー'
+  },
+  {
+    id: 'wine',
+    name: 'ワイン',
+    searchKeyword: '赤ワイン 750ml',
+    fallbackKeywords: ['白ワイン 750ml 辛口', '赤ワイン フルボディ 750ml', 'スパークリングワイン 750ml 辛口'],
+    articleTheme: '秋の晩酌の食卓を豊かに彩る、家飲みでじっくり味わいたいワイン10選',
+    subHeading: '葡萄の芳醇なアロマと余韻に浸る、極上ワイン'
+  },
+  {
+    id: 'sake',
+    name: '日本酒',
+    searchKeyword: '日本酒 純米大吟醸 720ml',
+    fallbackKeywords: ['日本酒 特別純米 720ml', '日本酒 純米吟醸 720ml', '日本酒 720ml'],
+    articleTheme: '仕事終わりに沁み渡る、秋の晩酌に飲みたいこだわりの日本酒10選',
+    subHeading: '米の旨味とキレを味わう、至高の地酒'
+  },
+  {
+    id: 'shochu',
+    name: '焼酎・泡盛',
+    searchKeyword: '本格焼酎 720ml',
+    fallbackKeywords: ['本格焼酎 芋焼酎 720ml', '本格焼酎 麦焼酎 720ml', '沖縄 泡盛 古酒 720ml'],
+    articleTheme: '秋の夜風を感じながらロックや湯割りでじっくり飲みたい本格焼酎・泡盛10選',
+    subHeading: '深いコクと香りが広がる、こだわりの焼酎・泡盛'
+  },
+  {
+    id: 'beer',
+    name: 'クラフトビール',
+    searchKeyword: 'クラフトビール 瓶 缶',
+    fallbackKeywords: ['地ビール 瓶 詰め合わせ', 'クラフトビール IPA', 'クラフトビール 飲み比べ'],
+    articleTheme: '仕事終わりにキンキンに冷やして喉を潤したい、極上のクラフトビール10選',
+    subHeading: '豊かなホップの香りと深い味わい、極上クラフトビール'
+  }
+];
+
+// 投稿実行カウンターの管理（6回に1回特集記事を発動、ジャンルを均等に周回）
+function getPostCount() {
+  const filePath = './post_count.json';
+  if (fs.existsSync(filePath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      return typeof data.count === 'number' ? data.count : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+  return 0;
+}
+
+function savePostCount(count) {
+  const filePath = './post_count.json';
+  fs.writeFileSync(filePath, JSON.stringify({ count, lastUpdated: new Date().toISOString() }, null, 2));
+}
+
+// お酒10選の対象ジャンルから10商品を厳選取得
+async function fetchLiquor10Group(genre) {
+  console.log(`[お酒10選モード] ターゲットジャンル: ${genre.name}`);
+  const postedList = getPostedItems();
+  const selectedItems = [];
+
+  const searchKeywords = [genre.searchKeyword, ...genre.fallbackKeywords];
+
+  for (const kw of searchKeywords) {
+    if (selectedItems.length >= 10) break;
+    const items = await searchRakutenItems(kw, 30, 'alcohol');
+    for (const raw of items) {
+      if (selectedItems.length >= 10) break;
+      raw.cleanName = cleanProductName(raw.itemName);
+      if (!isItemAlreadyPosted(raw, postedList) && !selectedItems.some(it => areItemsTooSimilar(it, raw))) {
+        selectedItems.push(raw);
+        savePostedItem(raw);
+      }
+    }
+  }
+
+  // 10点に満たない場合でも6点以上あれば特集記事として成立させる
+  if (selectedItems.length < 6) {
+    console.log(`[警告] お酒10選用の商品が充分に集まりませんでした (${selectedItems.length}品)`);
+    return null;
+  }
+
+  console.log(`[お酒10選確定] ${genre.name} より ${selectedItems.length}品 を選定しました！`);
+  return {
+    genre,
+    items: selectedItems.map(it => ({
+      itemName: it.itemName,
+      cleanName: it.cleanName,
+      itemUrl: it.affiliateUrl || it.itemUrl,
+      imageUrl: it.mediumImageUrls?.[0]?.imageUrl || it.mediumImageUrls?.[0] || '',
+      price: it.itemPrice
+    }))
+  };
+}
+
+// お酒10選の特集記事生成
+async function generateLiquor10Article(liquorGroup) {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY;
+  const profileContent = getProfileData();
+  const genre = liquorGroup.genre;
+  const items = liquorGroup.items;
+  const count = items.length;
+
+  const itemListText = items.map((it, idx) => {
+    return `【第${idx + 1}位 / 候補${idx + 1}】
+- 楽天市場での正式商品名（検索用）: ${it.itemName}
+- 銘柄・商品愛称: ${it.cleanName}
+- 価格/寄付金額: ${it.price.toLocaleString()}円`;
+  }).join('\n\n');
+
+  const prompt = `
+以下の【プロフィール設定】と【特集テーマ・厳選お酒${count}品】を基に、Amebaブログ用の「一人きりの部屋で家飲みを極めたい筆者が語る、お酒${count}選特集記事」を作成してください。
+
+==================================================
+【プロフィール設定】
+${profileContent}
+
+【特集ジャンル】
+${genre.name}
+
+【記事のテーマ】
+${genre.articleTheme}
+
+【厳選した${count}品の商品リスト】
+${itemListText}
+==================================================
+
+【最重要！投稿者ペルソナと記事のスタンス】
+- **ペルソナ**: 30代独身男性。少し根暗で物静か。休日の予定もなく、部屋で一人ちびちび酒を飲むのが唯一の癒やし。
+- **トーン＆マナー**: 静かな夜の独白、お酒への真摯で深いこだわり。
+- ❌ **元気すぎる挨拶（「お疲れ様でした！」「おうち晩酌部です！」「〜部です！」など）は絶対に禁止！**
+- 「仕事が終わって静まり返った部屋。手元の薄いハイボールを飲みながら、いつか味わってみたい憧れのお酒や、今夜の家飲みにぴったりの名酒をじっくり選定する時間…」というリアルな情熱。
+- すべての文章や見出しを、使い回しテンプレートではなく**今回の${genre.name}特選ラインナップに特化したオリジナルの言葉**で執筆してください。
+
+--------------------------------------------------
+【絶対に守るべき必須要素】
+1. **情景が目に浮かぶ冒頭**:
+   - 仕事終わりの静かな夜、一人きりの部屋で晩酌しながら「${genre.articleTheme}」をテーマに真剣に選りすぐった背景を語る。
+2. **SEO＆アメブロ公式ジャンル対策（「家飲み」「晩酌」の自然な織り込み）**:
+   - 記事全体を通じて、**「家飲み」「晩酌」という単語を自然に（それぞれ2〜4回程度）織り込んでください**。
+3. **楽天市場での正式商品名のルール**:
+   - 各商品のセクション冒頭で、それぞれ1回だけ【楽天市場での正式商品名】を正確に記載してください。
+4. **全${count}品の丁寧な紹介**:
+   - それぞれの銘柄の個性（香り、口当たり、喉越し、おすすめの飲み方（ロック・ストレート・炭酸割り・ぬる燗など））を語る。
+5. **筆者の本音のイチオシ**:
+   - 「この中で今夜の自分に最も刺さっている1本」を語る。
+6. **静かな締めくくり**:
+   - 「時計の秒針を聞きながら、今夜はこのお酒たちを眺めつつもう一杯飲んで眠りにつきます」と読者に静かに語りかけて終わる。
+
+--------------------------------------------------
+【Markdown見出し構成ルール】
+- 記事タイトル例: 【${genre.name}10選】秋の夜長の家飲みに。一人静かに味わいたい極上銘酒 / 仕事終わりの晩酌に飲みたい、至高の${genre.name}選
+- h1（#）は本文中で使用禁止。h2（##）およびh3（###）を使用すること。
+- 各セクションの間は \`---\` で区切ること。
+- 構成案：
+  - 冒頭（夜の静寂、仕事終わりの晩酌、今回のテーマ）
+  - \`---\`
+  - \`## ${genre.articleTheme}\`
+  ${items.map((it, idx) => `  - \`### ${idx + 1}. 『${it.cleanName}』\`（※冒頭に【楽天市場での正式商品名】『${it.itemName}』と価格を明記）\n`).join('')}
+  - \`---\`
+  - \`## 今夜、個人的に一番心が動いている1本\`
+  - \`---\`
+  - \`## 静かな部屋で、夜の余韻とともに\`
+
+--------------------------------------------------
+出力は必ず以下の有効なJSON形式のみとしてください：
+{
+  "title": "記事タイトル文字列",
+  "contentHtml": "（Markdown形式の本文文字列）",
+  "tags": ["家飲み", "晩酌", "${genre.name}", "一人飲み", "ふるさと納税"]
+}
+`;
+
+  // --- A. Gemini API 試行 ---
+  if (geminiApiKey) {
+    const models = [
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.1-flash-lite'
+    ];
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+
+    for (const modelName of models) {
+      try {
+        console.log(`[Gemini API] お酒10選記事 モデル ${modelName} を試行中...`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const response = await model.generateContent(prompt);
+        const text = response.response.text().trim();
+        const cleanedJson = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        const article = JSON.parse(cleanedJson);
+        article.contentHtml = convertToCleanHtml(article.contentHtml);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : ['家飲み', '晩酌', genre.name, '一人飲み', 'ふるさと納税'];
+        console.log(`[AI生成] Gemini (${modelName}) でお酒10選記事の生成に成功！`);
+        return article;
+      } catch (err) {
+        console.log(`[Gemini API (${modelName}) エラー]: ${err.message}`);
+      }
+    }
+  }
+
+  // --- B. Groq API 試行 ---
+  if (groqApiKey) {
+    const groqModels = [
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
+      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (instant)' }
+    ];
+    const groq = new Groq({ apiKey: groqApiKey });
+
+    for (const m of groqModels) {
+      try {
+        console.log(`[Groq API] お酒10選記事 モデル ${m.name} を試行中...`);
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: 'あなたはAmebaブログで人気の晩酌ブロガーです。要求されたJSON形式のみで回答してください。' },
+            { role: 'user', content: prompt }
+          ],
+          model: m.id,
+          response_format: { type: 'json_object' }
+        });
+        const text = chatCompletion.choices[0]?.message?.content || '';
+        const article = JSON.parse(text);
+        article.contentHtml = convertToCleanHtml(article.contentHtml);
+        article.tags = Array.isArray(article.tags) && article.tags.length > 0 ? article.tags : ['家飲み', '晩酌', genre.name, '一人飲み', 'ふるさと納税'];
+        console.log(`[AI生成] Groq (${m.name}) でお酒10選記事の生成に成功！`);
+        return article;
+      } catch (err) {
+        console.log(`[Groq API (${m.name}) エラー]: ${err.message}`);
+      }
+    }
+  }
+
+  // --- C. フォールバック記事生成 ---
+  console.log('AI API不可のため、フォールバック10選記事を生成します。');
+  const title = `【${genre.name}特集】秋の夜長の家飲みに。一人静かに味わいたい極上の一杯`;
+  const rawFallback = `
+仕事が終わって静まり返った部屋。
+今夜の晩酌のお供として、じっくり向き合いたい**「${genre.articleTheme}」**を一人で選び抜いてみました。
+
+家飲みの時間を少しだけ特別にしてくれる、極上のラインナップです。
+
+---
+
+## ${genre.articleTheme}
+
+${items.map((it, idx) => `
+### ${idx + 1}. 『${it.cleanName}』
+【楽天市場での正式商品名】『${it.itemName}』（${it.price.toLocaleString()}円）
+
+この銘柄ならではの豊かな風味と余韻は、一人きりの夜にゆっくりと味わうのに最適です。
+`).join('\n---\n')}
+
+---
+
+## 今夜、個人的に一番心が動いている1本
+
+どれも素晴らしい個性を持っていますが、今夜の気分なら『${items[0].cleanName}』に手が伸びそうです。
+
+静かな部屋で、もう一杯だけ飲んで眠ろうと思います。
+それでは、おやすみなさい。
+`;
+
+  return {
+    title,
+    contentHtml: convertToCleanHtml(rawFallback),
+    tags: ['家飲み', '晩酌', genre.name, '一人飲み', 'ふるさと納税']
+  };
+}
+
+// メイン処理（6回に1回の特集記事と通常のおつまみペアリング記事を均等ローテーション）
 async function main() {
+  const currentCount = getPostCount();
+  const nextCount = currentCount + 1;
+  console.log(`=== 投稿実行カウンタ: 前回=${currentCount} -> 今回=${nextCount} ===`);
+
+  // 6回に1回（count % 6 === 0）でお酒10選特集を発動
+  const isLiquorFeatureRound = (nextCount % 6 === 0);
+
+  if (isLiquorFeatureRound) {
+    const cycleIndex = Math.floor(nextCount / 6) - 1;
+    const genreIndex = ((cycleIndex % LIQUOR_GENRES.length) + LIQUOR_GENRES.length) % LIQUOR_GENRES.length;
+    const selectedGenre = LIQUOR_GENRES[genreIndex];
+
+    console.log(`★【6回に1回の特別企画】お酒10選特集モード発動！ (ジャンル: ${selectedGenre.name}, 周期=${cycleIndex})`);
+
+    const liquorGroup = await fetchLiquor10Group(selectedGenre);
+    if (liquorGroup && liquorGroup.items.length >= 6) {
+      console.log(`『${selectedGenre.name}10選』特集記事をAI生成します...`);
+      const article = await generateLiquor10Article(liquorGroup);
+      console.log('Amebaへの自動投稿処理を開始します...');
+      await postToAmeba(article.title, article.contentHtml, article.tags, liquorGroup);
+      savePostCount(nextCount);
+      console.log(`[成功] お酒10選特集記事の下書き保存完了 (カウント: ${nextCount})`);
+      return;
+    } else {
+      console.log('[注意] お酒10選の商品取得が不十分だったため、通常のおつまみ×お酒ペアリングモードにフォールバックします。');
+    }
+  }
+
+  // 通常モード: おつまみ3品 ＋ 相棒のお酒1品ペアリング記事
   console.log('=== おつまみ×お酒ペアリング探訪モード開始 ===');
   const itemGroup = await fetchSnackAndAlcoholGroup();
 
@@ -946,6 +1303,9 @@ async function main() {
 
   console.log('Amebaへの自動投稿処理を開始します...');
   await postToAmeba(article.title, article.contentHtml, article.tags, itemGroup);
+  savePostCount(nextCount);
+  console.log(`[成功] おつまみ×お酒ペアリング記事の下書き保存完了 (カウント: ${nextCount})`);
 }
 
 main();
+

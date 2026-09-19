@@ -40,10 +40,10 @@ jobs:
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
         run: node auto_post.js
 
-      - name: 投稿履歴（posted_items.json / used_keywords.json）の保存・コミット
+      - name: 投稿履歴（posted_items.json / used_keywords.json / post_count.json）の保存・コミット
         if: always()
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add posted_items.json used_keywords.json
+          git add posted_items.json used_keywords.json post_count.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update posted items and keywords [skip ci]" && git push)
